@@ -1,0 +1,34 @@
+services:
+  remotearch:
+    build:
+      context: .
+      dockerfile: addons/remotearch/Dockerfile
+    image: remotearch:arch-lxqt-working
+    environment:
+      SELKIES_MODE: websockets
+      SELKIES_ENABLE_DUAL_MODE: "false"
+      SELKIES_PORT: "8080"
+      START_LXQT: "true"
+      SELKIES_WAYLAND: "true"
+      SELKIES_AUDIO_BITRATE: "192000"
+      SELKIES_AUDIO_DEVICE_NAME: output.monitor
+      PASSWD: "Pattaya2026"
+      DRI_NODE: /dev/dri/renderD128
+      MESA_VK_DEVICE_SELECT: "8086:56a1"
+      VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/intel_icd.json
+    ports:
+      - "3020:8080"
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/fuse:/dev/fuse
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - /srv/dev-disk-by-uuid-63896276-89b7-4ac3-b87a-74716c1ce7d9/DockerApps/romm/library:/roms:ro
+      - /srv/dev-disk-by-uuid-63896276-89b7-4ac3-b87a-74716c1ce7d9/DockerApps/remotearch/home:/home/ubuntu
+    shm_size: "2gb"
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
