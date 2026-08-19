@@ -100,28 +100,33 @@ RUN mkdir -p /etc/xdg/lxqt /etc/xdg/pcmanfm-qt/lxqt && \
     printf 'TerminalEmulator=%s.desktop\n' "${TERMINAL}" > /etc/xdg/qtxdg.conf
 
 # Selkies from wheels/ or PyPI
+# Prefer a single selkies wheel: .dev0 (bundled web client) first, else any selkies-*.whl,
+# else fall back to PyPI. Never pass multiple selkies-*.whl to pip.
 COPY addons/remotearch/wheels/ /tmp/wheels/
 RUN pacman -Sy --noconfirm --needed \
       python python-pip python-evdev \
       base-devel linux-api-headers && \
     set -e; \
-    SELKIES_WHL="$(ls /tmp/wheels/selkies-*.whl 2>/dev/null || true)"; \
+    SELKIES_WHL="$(ls -1 /tmp/wheels/selkies-0.0.0.dev0-*.whl 2>/dev/null | head -1 || true)"; \
+    if [ -z "${SELKIES_WHL}" ]; then \
+      SELKIES_WHL="$(ls -1 /tmp/wheels/selkies-*.whl 2>/dev/null | head -1 || true)"; \
+    fi; \
     if [ -z "${SELKIES_WHL}" ]; then \
       PKGS="${PYPI_PACKAGE}"; \
     else \
       PKGS="${SELKIES_WHL}"; \
-      if ls /tmp/wheels/pixelflux-*.whl > /dev/null 2>&1; then \
-        python -m pip download --no-cache-dir --no-deps --no-index \
-          --find-links /tmp/wheels --dest /tmp/picked pixelflux pcmflux > /dev/null || true; \
-        PKGS="${PKGS} $(ls /tmp/picked/*.whl 2>/dev/null || true)"; \
-      fi; \
+      for dep in pixelflux pcmflux; do \
+        W="$(ls -1 /tmp/wheels/${dep}-*.whl 2>/dev/null | head -1 || true)"; \
+        [ -n "${W}" ] && PKGS="${PKGS} ${W}"; \
+      done; \
     fi; \
+    echo "pip install: ${PKGS}"; \
     python -m pip install --break-system-packages --no-cache-dir \
       --retries 5 --timeout 60 --force-reinstall ${PKGS}; \
     (command -v selkies-resize >/dev/null || \
       find /usr -name 'selkies-resize' 2>/dev/null | head -1 | \
       xargs -r -I{} ln -sf {} /usr/local/bin/selkies-resize) || true; \
-    rm -rf /tmp/wheels /tmp/picked
+    rm -rf /tmp/wheels
 
 COPY --from=add-ons /opt/add-ons/lib/ /usr/lib/
 
