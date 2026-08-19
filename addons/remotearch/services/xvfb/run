@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 export DISPLAY="${DISPLAY:-:20}"
-export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-arch}"
 until [ -f "${XDG_RUNTIME_DIR}/container-env" ]; do sleep 0.5; done
 # shellcheck disable=SC1091  # written by container-entrypoint.sh at startup
 . "${XDG_RUNTIME_DIR}/container-env"
