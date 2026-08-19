@@ -2,9 +2,9 @@
 
 Arch Linux + LXQt desktop streamed in a browser via [Selkies](https://github.com/selkies-project/selkies).
 
-One image, one `docker compose build`. No Ubuntu extract step. Aimed at Intel Arc (A750/A770) but works with any `/dev/dri` render node.
+One image, one `docker compose build`. No Ubuntu extract step. Aimed at Intel Arc (A750/A770) but works with AMD (Mesa RADV) and NVIDIA (with host drivers + NVIDIA Container Toolkit).
 
-**Current release:** [0.1.0](CHANGELOG.md) (2026-08-19)
+**Current release:** [0.1.1](CHANGELOG.md) (2026-08-19)
 
 ## Features
 
@@ -21,7 +21,7 @@ One image, one `docker compose build`. No Ubuntu extract step. Aimed at Intel Ar
 ```bash
 git clone https://github.com/Manya3084/selkies-arch-lxqt.git
 cd selkies-arch-lxqt
-cp .env.example .env   # set PASSWD
+cp .env.example .env   # set PASSWD + GPU vars if needed
 mkdir -p home
 docker compose build
 docker compose up -d
@@ -40,20 +40,146 @@ build:
 - **context** must be the repo root (so `COPY addons/js-interposer` works)
 - **dockerfile** is the Arch image, not a Selkies wheel builder
 
-## GPU (Intel Arc)
+## GPU setup
 
-Defaults in `docker-compose.yml`:
-
-| Variable | Meaning |
-|---|---|
-| `DRI_NODE` | `/dev/dri/renderD128` (change if needed) |
-| `MESA_VK_DEVICE_SELECT` | `8086:56a1` = Arc A750; A770 is often `8086:56a0` |
-| `VK_ICD_FILENAMES` | Intel Vulkan ICD path inside the image |
-
-List nodes on the host:
+Find your render node and PCI ID on the host:
 
 ```bash
 ls -l /dev/dri/by-path/
+lspci -nn | grep -E 'VGA|3D|Display'
+```
+
+Defaults in `docker-compose.yml` / `.env`:
+
+| Variable | Meaning |
+|---|---|
+| `DRI_NODE` | Render node, e.g. `/dev/dri/renderD128` |
+| `MESA_VK_DEVICE_SELECT` | `vendor:device` PCI ID (Mesa device picker) |
+| `VK_ICD_FILENAMES` | Vulkan ICD JSON inside the image |
+
+### Intel Arc (default)
+
+Image packages: `vulkan-intel`, `intel-media-driver`, Mesa.
+
+| Card | `MESA_VK_DEVICE_SELECT` | Notes |
+|---|---|---|
+| Arc A750 | `8086:56a1` | Default in compose |
+| Arc A770 | `8086:56a0` | |
+| Arc A580 | `8086:56a2` | |
+| Arc B580 | `8086:e20b` | Battlemage — confirm with `lspci -nn` |
+
+```bash
+# .env
+DRI_NODE=/dev/dri/renderD128
+MESA_VK_DEVICE_SELECT=8086:56a1
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json
+```
+
+### AMD (Mesa RADV)
+
+Works with the same `/dev/dri` pass-through as Intel. Image already has Mesa; set the ICD to the Radeon one and your GPU’s PCI ID.
+
+| Card (examples) | Typical PCI ID |
+|---|---|
+| RX 7900 XTX / XT | `1002:744c` / `1002:7448` |
+| RX 7800 XT | `1002:747e` |
+| RX 7600 | `1002:7480` |
+| RX 6800 XT | `1002:73bf` |
+| RX 6700 XT | `1002:73df` |
+| RX 6600 / XT | `1002:73ff` / `1002:73df` |
+| RX 580 | `1002:67df` |
+
+Always confirm with `lspci -nn`.
+
+```bash
+# .env
+DRI_NODE=/dev/dri/renderD128
+MESA_VK_DEVICE_SELECT=1002:744c
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json
+```
+
+If the ICD path differs inside the container, check with:
+
+```bash
+docker exec <container> ls /usr/share/vulkan/icd.d/
+```
+
+### NVIDIA
+
+This image is **Mesa-oriented**. Proprietary NVIDIA support needs host drivers **and** the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
+
+| Card (examples) | Typical PCI ID |
+|---|---|
+| RTX 4090 | `10de:2684` |
+| RTX 4080 | `10de:2704` |
+| RTX 4070 / Ti | `10de:2786` / `10de:2782` |
+| RTX 3090 | `10de:2204` |
+| RTX 3080 | `10de:2206` |
+| RTX 3060 | `10de:2504` |
+| GTX 1080 | `10de:1b80` |
+
+Confirm with `lspci -nn`.
+
+**1. Host requirements**
+
+- Proprietary NVIDIA driver installed and working
+- `nvidia-container-toolkit` installed
+- Docker configured to use the NVIDIA runtime (toolkit install usually does this)
+
+**2. Compose changes** (add or replace the GPU-related bits)
+
+```yaml
+services:
+  remotearch:
+    # ... existing build/image/ports/volumes ...
+    environment:
+      # ... existing env ...
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: all
+      # Optional if using Mesa device select against a specific card:
+      # MESA_VK_DEVICE_SELECT: 10de:2684
+      VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/nvidia_icd.json
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # Keep /dev/dri if you also want KMS/render nodes; primary path is the NVIDIA runtime
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/fuse:/dev/fuse
+```
+
+Alternatively, with an older toolkit setup:
+
+```yaml
+runtime: nvidia
+```
+
+**3. ICD inside the image**
+
+The stock image may not ship `nvidia_icd.json`. On NVIDIA hosts you typically rely on the toolkit mounting driver userspace, or you install matching userspace in a custom layer. If Vulkan fails to load, check:
+
+```bash
+docker exec <container> ls /usr/share/vulkan/icd.d/
+docker exec <container> nvidia-smi   # should work if toolkit + runtime are correct
+```
+
+**Note:** Pure Mesa paths (`/dev/dri` only, no toolkit) do **not** use proprietary NVIDIA drivers. For NVIDIA, prefer the toolkit + `deploy.resources` / `runtime: nvidia` approach above.
+
+### Multiple GPUs
+
+Pin the node and PCI ID so Selkies and apps hit the card you want:
+
+```bash
+ls -l /dev/dri/by-path/
+# e.g. pci-0000:03:00.0-render -> ../renderD129
+
+# .env
+DRI_NODE=/dev/dri/renderD129
+MESA_VK_DEVICE_SELECT=8086:56a1   # or 1002:… / 10de:…
 ```
 
 ## Wheels
@@ -75,7 +201,7 @@ docker cp <container>:/tmp/w/. ./addons/remotearch/wheels/
 
 ## Adding packages
 
-Edit the "Extra apps" block near the end of `addons/remotearch/Dockerfile`:
+Edit the “Extra apps” block near the end of `addons/remotearch/Dockerfile`:
 
 ```dockerfile
 RUN pacman -Sy --noconfirm --needed \
