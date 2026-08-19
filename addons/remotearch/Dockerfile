@@ -150,6 +150,32 @@ RUN pacman -Sy --noconfirm --needed \
       gvfs gvfs-smb \
     && pacman -Scc --noconfirm
 
+# PCSX2 + Flycast (official AppImages — not in Arch repos; AUR-only otherwise)
+# Extracted (not FUSE-mounted) so they run reliably inside the container.
+ARG PCSX2_APPIMAGE_URL=https://github.com/PCSX2/pcsx2/releases/download/v2.6.3/pcsx2-v2.6.3-linux-appimage-x64-Qt.AppImage
+ARG FLYCAST_APPIMAGE_URL=https://github.com/flyinghead/flycast/releases/download/v2.7/flycast-x86_64-2.7.AppImage
+RUN set -e; \
+    mkdir -p /opt/pcsx2 /opt/flycast /usr/local/share/applications; \
+    curl -fsSL -o /tmp/pcsx2.AppImage "${PCSX2_APPIMAGE_URL}"; \
+    curl -fsSL -o /tmp/flycast.AppImage "${FLYCAST_APPIMAGE_URL}"; \
+    chmod +x /tmp/pcsx2.AppImage /tmp/flycast.AppImage; \
+    cd /opt/pcsx2 && /tmp/pcsx2.AppImage --appimage-extract && \
+      ln -sf /opt/pcsx2/squashfs-root/AppRun /usr/local/bin/pcsx2 && \
+      ln -sf /opt/pcsx2/squashfs-root/AppRun /usr/local/bin/PCSX2; \
+    cd /opt/flycast && /tmp/flycast.AppImage --appimage-extract && \
+      ln -sf /opt/flycast/squashfs-root/AppRun /usr/local/bin/flycast; \
+    printf '%s\n' \
+      '[Desktop Entry]' 'Type=Application' 'Name=PCSX2' \
+      'Comment=PlayStation 2 emulator' 'Exec=pcsx2' 'Icon=pcsx2' \
+      'Categories=Game;Emulator;' 'Terminal=false' \
+      > /usr/local/share/applications/pcsx2.desktop; \
+    printf '%s\n' \
+      '[Desktop Entry]' 'Type=Application' 'Name=Flycast' \
+      'Comment=Dreamcast / Naomi / Atomiswave emulator' 'Exec=flycast' 'Icon=flycast' \
+      'Categories=Game;Emulator;' 'Terminal=false' \
+      > /usr/local/share/applications/flycast.desktop; \
+    rm -f /tmp/pcsx2.AppImage /tmp/flycast.AppImage
+
 USER 1000
 
 ENV PIPEWIRE_LATENCY="128/48000"
