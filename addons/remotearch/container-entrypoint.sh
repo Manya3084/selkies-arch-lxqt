@@ -33,7 +33,7 @@ is_true() {
 }
 
 # Wait for XDG_RUNTIME_DIR to exist (created by the image ENV or the caller)
-export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-arch}"
 mkdir -pm700 "${XDG_RUNTIME_DIR}"
 
 # Configure joystick interposer and fake-udev (container-only gamepad plumbing)
