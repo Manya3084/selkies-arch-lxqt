@@ -26,6 +26,6 @@ services:
     security_opt:
       - apparmor:unconfined
     volumes:
-      - ./home:/home/ubuntu
+      - ./home:/home/arch
     shm_size: "2gb"
     restart: unless-stopped
