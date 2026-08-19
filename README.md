@@ -1,21 +1,99 @@
-![Selkies](/docs/assets/logo/horizontal.svg)
+# selkies-arch-lxqt
 
-[![Build](https://github.com/selkies-project/selkies/actions/workflows/ci.yaml/badge.svg)](https://github.com/selkies-project/selkies/actions/workflows/ci.yaml)
-[![License: MPL 2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
-[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://selkies-project.github.io/selkies/)
-[![Discord](https://img.shields.io/badge/dynamic/json?logo=discord&label=Discord%20Members&query=approximate_member_count&url=https%3A%2F%2Fdiscordapp.com%2Fapi%2Finvites%2FwDNGDeSW5F%3Fwith_counts%3Dtrue)](https://discord.gg/wDNGDeSW5F)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/selkies-project/selkies)
+Arch Linux + LXQt desktop streamed in a browser via [Selkies](https://github.com/selkies-project/selkies).
 
-**Moonlight, Google Stadia, or GeForce NOW in noVNC form factor for Linux X11 and Wayland, in any HTML5 web interface you wish to embed inside, with at least 60 frames per second on Full HD resolution.**
+One image, one `docker compose build`. No Ubuntu extract step. Aimed at Intel Arc (A750/A770) but works with any `/dev/dri` render node.
 
-**We are in need of maintainers and community contributors. Please consider stepping up, as we can never have too much help!**
+## Features
 
-Selkies is an open-source low-latency high-performance Linux-native GPU/CPU-accelerated HTML5 remote desktop streaming platform, for self-hosting, containers, Kubernetes, or Cloud/HPC platforms, [started out first by Google engineers](https://web.archive.org/web/20210310083658/https://cloud.google.com/solutions/gpu-accelerated-streaming-using-webrtc), then expanded by academic researchers and [LinuxServer.io](https://www.linuxserver.io). It streams over plain WebSockets by default, with WebRTC available as an opt-in transport.
+- Arch Linux base, LXQt session, labwc (Wayland) + XWayland
+- Selkies WebSocket streamer (HTML5 client)
+- PipeWire audio
+- s6-overlay process supervision
+- Joystick interposer + fake-udev (from Selkies addons)
+- Optional apps in the Dockerfile (currently `dolphin-emu`)
+- Vendored Python wheels under `addons/remotearch/wheels/` for offline-friendly builds
 
-Selkies is designed for researchers studying Agentic AI, Graphical AI, Robotics, Autonomous Driving, Drug Discovery technologies, SLURM supercomputer or HPC system administrators, Jupyter, Kubernetes, Docker®, Coder infrastructure administrators, and Linux cloud gaming enthusiasts.
+## Quick start
 
-While designed for clustered or unprivileged containerized environments, Selkies can also be deployed in desktop computers, and any performance issue that would be problematic in cloud gaming platforms is also considered a bug.
+```bash
+git clone https://github.com/Manya3084/selkies-arch-lxqt.git
+cd selkies-arch-lxqt
+cp .env.example .env   # set PASSWD
+mkdir -p home
+docker compose build
+docker compose up -d
+```
 
-The HTML5 client runs on Chromium, Firefox, and Safari, with two-way clipboard (text and images), low-latency zero-copy video rendering, automatic GPU selection, and resilient keyboard, mouse, and gamepad input.
+Open `http://<host>:3020` and log in with the password from `.env`.
 
-**[Read the Documentation](https://selkies-project.github.io/selkies/) to get started.**
+## Compose layout
+
+```yaml
+build:
+  context: .
+  dockerfile: addons/remotearch/Dockerfile
+```
+
+- **context** must be the repo root (so `COPY addons/js-interposer` works)
+- **dockerfile** is the Arch image, not a Selkies wheel builder
+
+## GPU (Intel Arc)
+
+Defaults in `docker-compose.yml`:
+
+| Variable | Meaning |
+|---|---|
+| `DRI_NODE` | `/dev/dri/renderD128` (change if needed) |
+| `MESA_VK_DEVICE_SELECT` | `8086:56a1` = Arc A750; A770 is often `8086:56a0` |
+| `VK_ICD_FILENAMES` | Intel Vulkan ICD path inside the image |
+
+List nodes on the host:
+
+```bash
+ls -l /dev/dri/by-path/
+```
+
+## Wheels
+
+`addons/remotearch/wheels/` should contain:
+
+- `selkies-*.whl`
+- `pixelflux-*.whl` (optional but recommended)
+- `pcmflux-*.whl` (optional but recommended)
+
+If no `selkies-*.whl` is present, the Dockerfile falls back to `pip install selkies` from PyPI.
+
+Rebuild wheels from a working container:
+
+```bash
+docker exec <container> python -m pip wheel --no-deps -w /tmp/w selkies pixelflux pcmflux
+docker cp <container>:/tmp/w/. ./addons/remotearch/wheels/
+```
+
+## Adding packages
+
+Edit the "Extra apps" block near the end of `addons/remotearch/Dockerfile`:
+
+```dockerfile
+RUN pacman -Sy --noconfirm --needed \
+      dolphin-emu \
+      # firefox \
+    && pacman -Scc --noconfirm
+```
+
+Then `docker compose build && docker compose up -d`.
+
+## Persist the home directory
+
+```yaml
+volumes:
+  - ./home:/home/ubuntu
+```
+
+Do not commit `home/` or `.env`.
+
+## License
+
+Selkies components and derived scripts are under the [Mozilla Public License 2.0](LICENSE).  
+Arch packages follow their own licenses.
