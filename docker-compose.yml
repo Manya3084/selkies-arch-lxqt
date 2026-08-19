@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: addons/remotearch/Dockerfile
-    image: remotearch:arch-lxqt-working
+    image: selkies-arch-lxqt
     environment:
       SELKIES_MODE: websockets
       SELKIES_ENABLE_DUAL_MODE: "false"
