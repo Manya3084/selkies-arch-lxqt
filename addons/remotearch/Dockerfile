@@ -75,14 +75,14 @@ ENV LANG="en_US.UTF-8"
 ENV LANGUAGE="en_US:en"
 ENV LC_ALL="en_US.UTF-8"
 
-RUN groupadd -g 1000 ubuntu 2>/dev/null || true; \
-    useradd -ms /bin/bash -u 1000 -g 1000 ubuntu 2>/dev/null || true; \
-    usermod -aG wheel,audio,video,render,input,storage ubuntu 2>/dev/null || \
-      usermod -aG audio,video,input ubuntu 2>/dev/null || true; \
+RUN groupadd -g 1000 arch 2>/dev/null || true; \
+    useradd -ms /bin/bash -u 1000 -g 1000 arch 2>/dev/null || true; \
+    usermod -aG wheel,audio,video,render,input,storage arch 2>/dev/null || \
+      usermod -aG audio,video,input arch 2>/dev/null || true; \
     mkdir -p /etc/sudoers.d && \
-    echo "ubuntu ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/ubuntu && \
-    chmod 440 /etc/sudoers.d/ubuntu && \
-    echo "ubuntu:${PASSWD}" | chpasswd
+    echo "arch ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/arch && \
+    chmod 440 /etc/sudoers.d/arch && \
+    echo "arch:${PASSWD}" | chpasswd
 
 # LXQt defaults
 RUN mkdir -p /etc/xdg/lxqt /etc/xdg/pcmanfm-qt/lxqt && \
@@ -149,7 +149,7 @@ RUN pacman -Sy --noconfirm --needed \
 USER 1000
 
 ENV PIPEWIRE_LATENCY="128/48000"
-ENV XDG_RUNTIME_DIR=/tmp/runtime-ubuntu
+ENV XDG_RUNTIME_DIR=/tmp/runtime-arch
 ENV PIPEWIRE_RUNTIME_DIR="${XDG_RUNTIME_DIR}"
 ENV PULSE_RUNTIME_PATH="${XDG_RUNTIME_DIR}/pulse"
 ENV PULSE_SERVER="unix:${XDG_RUNTIME_DIR}/pulse/native"
@@ -160,9 +160,9 @@ ENV SELKIES_WAYLAND_X11_FALLBACK=true
 ENV START_LXQT=true
 ENV SELKIES_PORT=8080
 ENV SHELL=/bin/bash
-ENV USER=ubuntu
-ENV HOME=/home/ubuntu
-WORKDIR /home/ubuntu
+ENV USER=arch
+ENV HOME=/home/arch
+WORKDIR /home/arch
 
 EXPOSE 8080
 ENTRYPOINT ["/etc/container-entrypoint.sh"]
