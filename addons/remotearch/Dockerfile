@@ -95,7 +95,7 @@ RUN mkdir -p /etc/xdg/lxqt /etc/xdg/pcmanfm-qt/lxqt && \
     command -v qterminal >/dev/null 2>&1 && TERMINAL=qterminal; \
     echo "LXQt defaults: icon_theme=${ICON_THEME} theme=${THEME} terminal=${TERMINAL}"; \
     printf '[General]\nicon_theme=%s\ntheme=%s\n' "${ICON_THEME}" "${THEME}" > /etc/xdg/lxqt/lxqt.conf; \
-    printf '[Desktop]\nWallpaperMode=color\nBgColor=#2e3436\nFgColor=#ffffff\n[System]\nTerminal=%s\n' \
+    printf '[Desktop]\nWallpaperMode=color\nBgColor=#2e3436\nFgColor=#ffffff\nShowHome=true\nShowTrash=false\nShowComputer=true\nShowNetwork=false\n[System]\nTerminal=%s\n' \
         "${TERMINAL}" > /etc/xdg/pcmanfm-qt/lxqt/settings.conf; \
     printf 'TerminalEmulator=%s.desktop\n' "${TERMINAL}" > /etc/xdg/qtxdg.conf
 
@@ -146,6 +146,7 @@ RUN echo "[ ! -z \"\$TERM\" -a -r /etc/motd ] && cat /etc/motd" >> /etc/bash.bas
 # Extra apps — add packages here so they survive image rebuilds
 RUN pacman -Sy --noconfirm --needed \
       dolphin-emu \
+      firefox \
     && pacman -Scc --noconfirm
 
 USER 1000
