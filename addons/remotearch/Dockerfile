@@ -147,6 +147,7 @@ RUN echo "[ ! -z \"\$TERM\" -a -r /etc/motd ] && cat /etc/motd" >> /etc/bash.bas
 RUN pacman -Sy --noconfirm --needed \
       dolphin-emu \
       firefox \
+      gvfs gvfs-smb \
     && pacman -Scc --noconfirm
 
 USER 1000
