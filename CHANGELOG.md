@@ -4,6 +4,20 @@ All notable changes to **selkies-arch-lxqt** are documented here.
 
 Format inspired by [Keep a Changelog](https://keepachangelog.com/). Versioning follows the image/desktop stack, not upstream Selkies releases.
 
+## [0.1.2] — 2026-08-19
+
+### Changed
+
+- Default desktop user renamed from `ubuntu` to **`arch`** (uid/gid still 1000)
+  - Home path is now `/home/arch`
+  - Compose volume: `./home:/home/arch`
+  - Runtime dir default: `/tmp/runtime-arch`
+  - **Migration:** update your `docker-compose.yml` volume if you still mount `/home/ubuntu`. Existing `./home` data is fine (same uid).
+
+### Added
+
+- README section on mounting extra host directories (Games, ROMs, Media, …)
+
 ## [0.1.1] — 2026-08-19
 
 ### Fixed
