@@ -37,15 +37,17 @@ if [ "${SELKIES_WAYLAND:-false}" = "true" ]; then
     done
   done
   export DISPLAY
-  # Window management belongs to the nested compositor; LXQt starting one of its
-  # own would find the selection taken and leave the session half-built
-  session_wm=/bin/true
+  # Window management belongs to the nested compositor. lxqt-session still wants
+  # a window_manager process; /bin/true exits immediately and tears the session
+  # down, so keep a no-op alive instead.
+  session_wm="sleep infinity"
   # The session draws natively on the nested compositor: its panel and desktop
   # are wlr-layer-shell surfaces (LXQt 2.1+), its window verbs are the ones
   # labwc performs itself, and the environment is what `startlxqtwayland` would
   # have exported — the compositor is already up, so only the environment is
   # wanted, not its exec.
   export XDG_SESSION_TYPE=wayland
+  export QT_QPA_PLATFORM=wayland
   export XDG_CURRENT_DESKTOP="LXQt:${SELKIES_WAYLAND_COMPOSITOR:-labwc}:wlroots"
   export QT_QPA_PLATFORMTHEME=lxqt
   export XDG_MENU_PREFIX=lxqt-
@@ -108,4 +110,4 @@ fi
 # OnlyShowIn=LXQt, and a session started outside a display manager has nobody
 # else to name the desktop
 export XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-LXQt}"
-exec dbus-launch --exit-with-session lxqt-session
+exec dbus-run-session -- lxqt-session
