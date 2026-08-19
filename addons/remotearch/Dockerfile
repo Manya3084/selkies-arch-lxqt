@@ -100,8 +100,8 @@ RUN mkdir -p /etc/xdg/lxqt /etc/xdg/pcmanfm-qt/lxqt && \
     printf 'TerminalEmulator=%s.desktop\n' "${TERMINAL}" > /etc/xdg/qtxdg.conf
 
 # Selkies from wheels/ or PyPI
-# Prefer a single selkies wheel: .dev0 (bundled web client) first, else any selkies-*.whl,
-# else fall back to PyPI. Never pass multiple selkies-*.whl to pip.
+# Prefer a single selkies wheel: .dev0 first, else any selkies-*.whl, else PyPI.
+# Web UI is NOT in this wheel — see COPY of selkies-web below.
 COPY addons/remotearch/wheels/ /tmp/wheels/
 RUN pacman -Sy --noconfirm --needed \
       python python-pip python-evdev \
@@ -134,6 +134,8 @@ COPY --chown=1000:1000 addons/remotearch/labwc-rc.xml /etc/xdg/labwc/rc.xml
 COPY --chown=1000:1000 addons/remotearch/container-entrypoint.sh /etc/container-entrypoint.sh
 COPY --chown=1000:1000 addons/remotearch/selkies-entrypoint.sh /etc/selkies-entrypoint.sh
 COPY --chown=1000:1000 addons/remotearch/services/ /etc/service/
+# HTML5 client (not inside the vendored wheel — see addons/remotearch/selkies-web/README.md)
+COPY addons/remotearch/selkies-web/ /opt/selkies-web/
 RUN chmod -f 755 /etc/container-entrypoint.sh /etc/selkies-entrypoint.sh && \
     find /etc/service \( -name run -o -name finish \) -exec chmod -f 755 {} + && \
     chmod 4755 /usr/bin/sudo 2>/dev/null || true
@@ -158,6 +160,7 @@ ENV SELKIES_WAYLAND_COMPOSITOR=""
 ENV SELKIES_WAYLAND_OUTPUTS=""
 ENV SELKIES_WAYLAND_X11_FALLBACK=true
 ENV START_LXQT=true
+ENV SELKIES_WEB_ROOT=/opt/selkies-web
 ENV SELKIES_PORT=8080
 ENV SHELL=/bin/bash
 ENV USER=arch

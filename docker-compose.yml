@@ -11,6 +11,7 @@ services:
       SELKIES_PORT: "8080"
       START_LXQT: "true"
       SELKIES_WAYLAND: "true"
+      SELKIES_WEB_ROOT: /opt/selkies-web
       SELKIES_AUDIO_BITRATE: "192000"
       SELKIES_AUDIO_DEVICE_NAME: output.monitor
       PASSWD: "${PASSWD:-changeme}"
