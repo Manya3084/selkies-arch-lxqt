@@ -1,5 +1,6 @@
 services:
-  remotearch:
+  selkies:
+    container_name: selkies-arch-lxqt
     build:
       context: .
       dockerfile: addons/remotearch/Dockerfile
