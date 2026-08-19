@@ -155,7 +155,7 @@ RUN pacman -Sy --noconfirm --needed \
 ARG PCSX2_APPIMAGE_URL=https://github.com/PCSX2/pcsx2/releases/download/v2.6.3/pcsx2-v2.6.3-linux-appimage-x64-Qt.AppImage
 ARG FLYCAST_APPIMAGE_URL=https://github.com/flyinghead/flycast/releases/download/v2.7/flycast-x86_64-2.7.AppImage
 RUN set -e; \
-    mkdir -p /opt/pcsx2 /opt/flycast /usr/local/share/applications; \
+    mkdir -p /opt/pcsx2 /opt/flycast /usr/local/share/applications /usr/share/icons/hicolor/512x512/apps; \
     curl -fsSL -o /tmp/pcsx2.AppImage "${PCSX2_APPIMAGE_URL}"; \
     curl -fsSL -o /tmp/flycast.AppImage "${FLYCAST_APPIMAGE_URL}"; \
     chmod +x /tmp/pcsx2.AppImage /tmp/flycast.AppImage; \
@@ -164,14 +164,19 @@ RUN set -e; \
       ln -sf /opt/pcsx2/squashfs-root/AppRun /usr/local/bin/PCSX2; \
     cd /opt/flycast && /tmp/flycast.AppImage --appimage-extract && \
       ln -sf /opt/flycast/squashfs-root/AppRun /usr/local/bin/flycast; \
+    cp -f /opt/pcsx2/squashfs-root/usr/share/icons/hicolor/512x512/apps/PCSX2.png \n      /usr/share/icons/hicolor/512x512/apps/pcsx2.png; \
+    cp -f /opt/flycast/squashfs-root/flycast.png \
+      /usr/share/icons/hicolor/512x512/apps/flycast.png; \
     printf '%s\n' \
       '[Desktop Entry]' 'Type=Application' 'Name=PCSX2' \
-      'Comment=PlayStation 2 emulator' 'Exec=pcsx2' 'Icon=pcsx2' \
+      'Comment=PlayStation 2 emulator' 'Exec=pcsx2' \
+      'Icon=/usr/share/icons/hicolor/512x512/apps/pcsx2.png' \
       'Categories=Game;Emulator;' 'Terminal=false' \
       > /usr/local/share/applications/pcsx2.desktop; \
     printf '%s\n' \
       '[Desktop Entry]' 'Type=Application' 'Name=Flycast' \
-      'Comment=Dreamcast / Naomi / Atomiswave emulator' 'Exec=flycast' 'Icon=flycast' \
+      'Comment=Dreamcast / Naomi / Atomiswave emulator' 'Exec=flycast' \
+      'Icon=/usr/share/icons/hicolor/512x512/apps/flycast.png' \
       'Categories=Game;Emulator;' 'Terminal=false' \
       > /usr/local/share/applications/flycast.desktop; \
     rm -f /tmp/pcsx2.AppImage /tmp/flycast.AppImage
