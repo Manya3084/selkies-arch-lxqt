@@ -152,21 +152,24 @@ RUN pacman -Sy --noconfirm --needed \
 
 # PCSX2 + Flycast (official AppImages — not in Arch repos; AUR-only otherwise)
 # Extracted (not FUSE-mounted) so they run reliably inside the container.
+# AppRun must be invoked via wrapper scripts — symlinks break relative paths.
 ARG PCSX2_APPIMAGE_URL=https://github.com/PCSX2/pcsx2/releases/download/v2.6.3/pcsx2-v2.6.3-linux-appimage-x64-Qt.AppImage
 ARG FLYCAST_APPIMAGE_URL=https://github.com/flyinghead/flycast/releases/download/v2.7/flycast-x86_64-2.7.AppImage
 RUN set -e; \
-    mkdir -p /opt/pcsx2 /opt/flycast /usr/local/share/applications /usr/share/icons/hicolor/512x512/apps; \
+    mkdir -p /opt/pcsx2 /opt/flycast /usr/local/share/applications /usr/share/icons/hicolor/512x512/apps /usr/share/icons/hicolor/48x48/apps; \
     curl -fsSL -o /tmp/pcsx2.AppImage "${PCSX2_APPIMAGE_URL}"; \
     curl -fsSL -o /tmp/flycast.AppImage "${FLYCAST_APPIMAGE_URL}"; \
     chmod +x /tmp/pcsx2.AppImage /tmp/flycast.AppImage; \
-    cd /opt/pcsx2 && /tmp/pcsx2.AppImage --appimage-extract && \
-      ln -sf /opt/pcsx2/squashfs-root/AppRun /usr/local/bin/pcsx2 && \
-      ln -sf /opt/pcsx2/squashfs-root/AppRun /usr/local/bin/PCSX2; \
-    cd /opt/flycast && /tmp/flycast.AppImage --appimage-extract && \
-      ln -sf /opt/flycast/squashfs-root/AppRun /usr/local/bin/flycast; \
-    cp -f /opt/pcsx2/squashfs-root/usr/share/icons/hicolor/512x512/apps/PCSX2.png \n      /usr/share/icons/hicolor/512x512/apps/pcsx2.png; \
-    cp -f /opt/flycast/squashfs-root/flycast.png \
-      /usr/share/icons/hicolor/512x512/apps/flycast.png; \
+    cd /opt/pcsx2 && /tmp/pcsx2.AppImage --appimage-extract; \
+    cd /opt/flycast && /tmp/flycast.AppImage --appimage-extract; \
+    printf '%s\n' '#!/bin/sh' 'exec /opt/pcsx2/squashfs-root/AppRun "$@"' > /usr/local/bin/pcsx2; \
+    printf '%s\n' '#!/bin/sh' 'exec /opt/pcsx2/squashfs-root/AppRun "$@"' > /usr/local/bin/PCSX2; \
+    printf '%s\n' '#!/bin/sh' 'exec /opt/flycast/squashfs-root/AppRun "$@"' > /usr/local/bin/flycast; \
+    chmod 755 /usr/local/bin/pcsx2 /usr/local/bin/PCSX2 /usr/local/bin/flycast; \
+    cp -f /opt/pcsx2/squashfs-root/usr/share/icons/hicolor/512x512/apps/PCSX2.png /usr/share/icons/hicolor/512x512/apps/pcsx2.png; \
+    cp -f /opt/flycast/squashfs-root/flycast.png /usr/share/icons/hicolor/512x512/apps/flycast.png; \
+    cp -f /usr/share/icons/hicolor/512x512/apps/pcsx2.png /usr/share/icons/hicolor/48x48/apps/pcsx2.png; \
+    cp -f /usr/share/icons/hicolor/512x512/apps/flycast.png /usr/share/icons/hicolor/48x48/apps/flycast.png; \
     printf '%s\n' \
       '[Desktop Entry]' 'Type=Application' 'Name=PCSX2' \
       'Comment=PlayStation 2 emulator' 'Exec=pcsx2' \
