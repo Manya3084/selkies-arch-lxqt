@@ -4,6 +4,8 @@ Arch Linux + LXQt desktop streamed in a browser via [Selkies](https://github.com
 
 One image, one `docker compose build`. No Ubuntu extract step. Aimed at Intel Arc (A750/A770) but works with any `/dev/dri` render node.
 
+**Current release:** [0.1.0](CHANGELOG.md) (2026-08-19)
+
 ## Features
 
 - Arch Linux base, LXQt session, labwc (Wayland) + XWayland
@@ -58,7 +60,7 @@ ls -l /dev/dri/by-path/
 
 `addons/remotearch/wheels/` should contain:
 
-- `selkies-*.whl`
+- `selkies-*.whl` (prefer a single file, e.g. `selkies-0.0.0.dev0-…`)
 - `pixelflux-*.whl` (optional but recommended)
 - `pcmflux-*.whl` (optional but recommended)
 
@@ -92,6 +94,10 @@ volumes:
 ```
 
 Do not commit `home/` or `.env`.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
