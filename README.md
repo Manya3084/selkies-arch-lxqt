@@ -4,7 +4,7 @@ Arch Linux + LXQt desktop streamed in a browser via [Selkies](https://github.com
 
 One image, one `docker compose build`. No Ubuntu extract step. Aimed at Intel Arc (A750/A770) but works with AMD (Mesa RADV) and NVIDIA (with host drivers + NVIDIA Container Toolkit).
 
-**Current release:** [0.1.1](CHANGELOG.md) (2026-08-19)
+**Current release:** [0.1.2](CHANGELOG.md) (2026-08-19)
 
 ## Features
 
@@ -212,14 +212,30 @@ RUN pacman -Sy --noconfirm --needed \
 
 Then `docker compose build && docker compose up -d`.
 
-## Persist the home directory
+## Persist home and extra directories
+
+The compose file bind-mounts a host folder over the container home so settings and installs survive rebuilds:
 
 ```yaml
 volumes:
-  - ./home:/home/ubuntu
+  - ./home:/home/arch
 ```
 
-Do not commit `home/` or `.env`.
+Add more host directories the same way (ROMs, games, media, downloads, …). Paths on the left are on the **host**; paths on the right are inside the container:
+
+```yaml
+volumes:
+  - ./home:/home/arch
+  - /path/on/host/Games:/home/arch/Games
+  - /path/on/host/ROMs:/home/arch/ROMs
+  - /mnt/storage/Media:/home/arch/Media
+```
+
+Notes:
+
+- Create the host paths first (`mkdir -p …`) or Docker may create them as root.
+- Container user is `arch` (uid/gid **1000**). Host files should be readable/writable by uid 1000, e.g. `chown -R 1000:1000 /path/on/host/Games`.
+- Do not commit `home/` or `.env`.
 
 ## Changelog
 
