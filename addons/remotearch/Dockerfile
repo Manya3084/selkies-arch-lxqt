@@ -115,7 +115,7 @@ RUN if [ "${PIXELFLUX_FROM_GIT}" != "1" ] && [ "${PCMFLUX_FROM_GIT}" != "1" ]; t
       python python-pip python-setuptools python-wheel \
       python-setuptools-rust \
       clang lld \
-      x264 libjpeg-turbo libpng \
+      x264 libjpeg-turbo libpng libyuv \
       libva libva-mesa-driver intel-media-driver \
       ffmpeg \
       libpulse opus \
@@ -189,7 +189,7 @@ RUN pacman -Syu --noconfirm --needed \
         python python-pip linux-api-headers \
         coturn labwc qt6-wayland \
         ttf-dejavu ttf-liberation noto-fonts noto-fonts-cjk noto-fonts-emoji \
-        git gnupg \
+        git gnupg libyuv x264 ffmpeg \
     && pacman -Scc --noconfirm
 
 # s6 supervision via s6-overlay (provides /command/s6-svscan)
