@@ -14,13 +14,16 @@ ARG SELKIES_REF=main
 ARG SELKIES_REPO=https://github.com/selkies-project/selkies.git
 ARG PACKAGE_VERSION=0.0.0.dev0
 
-# pixelflux / pcmflux from git (Rust native wheels on Arch)
+# pixelflux / pcmflux from git (Rust native wheels on Arch).
+# Default repo is the Selkies sibling (list_outputs / start_capture / compositor socket),
+# not linuxserver/pixelflux. AV1 is addons/remotearch/patches/pixelflux-av1-vaapi.patch
+# (output_mode=2 → av1_vaapi) — not Dockerfile sed.
 ARG PIXELFLUX_FROM_GIT=0
-ARG PIXELFLUX_REF=master
-ARG PIXELFLUX_REPO=https://github.com/linuxserver/pixelflux.git
+ARG PIXELFLUX_REF=main
+ARG PIXELFLUX_REPO=https://github.com/selkies-project/pixelflux.git
 ARG PCMFLUX_FROM_GIT=0
-ARG PCMFLUX_REF=master
-ARG PCMFLUX_REPO=https://github.com/linuxserver/pcmflux.git
+ARG PCMFLUX_REF=main
+ARG PCMFLUX_REPO=https://github.com/selkies-project/pcmflux.git
 ARG ENABLE_CHAOTIC_AUR=0
 
 # ---------------------------------------------------------------------------
@@ -112,7 +115,6 @@ ARG PCMFLUX_REF
 ARG PCMFLUX_REPO
 ENV TURBOJPEG_DYNAMIC=1
 ENV LIBCLANG_PATH=/usr/lib
-COPY addons/remotearch/patches/pixelflux-nvenc-stub.rs /tmp/nvenc-stub.rs
 COPY addons/remotearch/patches/pixelflux-av1-vaapi.patch /tmp/pixelflux-av1-vaapi.patch
 RUN mkdir -p /dist
 RUN if [ "${PIXELFLUX_FROM_GIT}" != "1" ] && [ "${PCMFLUX_FROM_GIT}" != "1" ]; then \
@@ -139,22 +141,8 @@ RUN if [ "${PIXELFLUX_FROM_GIT}" != "1" ] && [ "${PCMFLUX_FROM_GIT}" != "1" ]; t
       git remote add origin "${PIXELFLUX_REPO}"; \
       git fetch --depth 1 origin "${PIXELFLUX_REF}"; \
       git checkout FETCH_HEAD; \
-      if [ -f pixelflux/src/encoders/vaapi.rs ]; then \
-        patch -p1 < /tmp/pixelflux-av1-vaapi.patch; \
-        echo "patched pixelflux master for VAAPI AV1 (output_mode=2)"; \
-      fi; \
-      if [ -f pixelflux_wayland/Cargo.toml ]; then \
-        sed -i \
-          -e 's/ffmpeg-next = "8.0"/ffmpeg-next = "9"/' \
-          -e 's/ffmpeg-sys-next = "8.0"/ffmpeg-sys-next = "9"/' \
-          -e 's/features = \["cuda"\]/features = []/' \
-          pixelflux_wayland/Cargo.toml; \
-        echo "patched pixelflux Cargo.toml (ffmpeg-sys 9, no CUDA)"; \
-      fi; \
-      if [ -f pixelflux_wayland/src/encoders/nvenc.rs ]; then \
-        cp /tmp/nvenc-stub.rs pixelflux_wayland/src/encoders/nvenc.rs; \
-        echo "stubbed nvenc.rs (no CUDA)"; \
-      fi; \
+      patch -p1 < /tmp/pixelflux-av1-vaapi.patch; \
+      echo "patched selkies-project/pixelflux for VAAPI AV1 (start_capture output_mode=2)"; \
       python3 -m build --wheel --outdir /dist; \
     fi && \
     if [ "${PCMFLUX_FROM_GIT}" = "1" ]; then \

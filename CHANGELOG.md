@@ -4,6 +4,20 @@ All notable changes to **selkies-arch-lxqt** are documented here.
 
 Format inspired by [Keep a Changelog](https://keepachangelog.com/). Versioning follows the image/desktop stack, not upstream Selkies releases.
 
+## [0.3.1] — 2026-08-22
+
+### Changed
+
+- **pixelflux** is now built from the Selkies sibling [selkies-project/pixelflux](https://github.com/selkies-project/pixelflux) `main` (has `list_outputs` / `start_capture` / compositor socket). linuxserver/pixelflux `master` does not export those APIs.
+- **pcmflux** is now built from [selkies-project/pcmflux](https://github.com/selkies-project/pcmflux) `main`.
+- AV1 is a **real patch** (`addons/remotearch/patches/pixelflux-av1-vaapi.patch`) against that tree: `start_capture` with `output_mode=2` selects `av1_vaapi`. Removed the Dockerfile `pixelflux_wayland/` sed / NVENC-stub hacks (they never matched this layout) and the unused `pixelflux-nvenc-stub.rs`.
+- Selkies still uses `addons/remotearch/patches/selkies-av1enc.patch` so `_get_capture_settings` sets `output_mode=2` for `av1enc`.
+
+### Notes
+
+- Do not set `PIXELFLUX_REPO` back to linuxserver/pixelflux unless you also drop the AV1 patch — it will not apply.
+- Rebuild the image (`docker compose build`) after pulling.
+
 ## [0.3.0] — 2026-08-22
 
 ### Added

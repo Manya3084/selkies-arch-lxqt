@@ -10,9 +10,9 @@ services:
         SELKIES_REF: "main"
         PACKAGE_VERSION: "0.0.0.dev0"
         PIXELFLUX_FROM_GIT: "1"
-        PIXELFLUX_REF: "master"
+        PIXELFLUX_REF: "main"
         PCMFLUX_FROM_GIT: "1"
-        PCMFLUX_REF: "master"
+        PCMFLUX_REF: "main"
     image: selkies-arch-lxqt
     environment:
       SELKIES_MODE: websockets

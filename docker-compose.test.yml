@@ -1,12 +1,13 @@
 # Test stack on port 3022 — does not replace the daily container.
 # Chaotic-AUR + paru enabled.
 #
-# pixelflux is linuxserver `master` (working compositor) plus
-# addons/remotearch/patches/pixelflux-av1-vaapi.patch (VAAPI av1_vaapi,
-# output_mode=2). Selkies is upstream `main` plus
+# pixelflux is selkies-project `main` (list_outputs / start_capture / compositor
+# socket) plus addons/remotearch/patches/pixelflux-av1-vaapi.patch (VAAPI
+# av1_vaapi, output_mode=2 on start_capture). Selkies is upstream `main` plus
 # addons/remotearch/patches/selkies-av1enc.patch so the dashboard lists
-# "AV1 (VA-API Full Frame)" and the browser decodes av01.
-# Do not use PIXELFLUX_REF=av1 — that old branch has no compositor socket.
+# "AV1 (VA-API Full Frame)", start_capture sets output_mode=2, and the browser
+# decodes av01. Do not use linuxserver/pixelflux PIXELFLUX_REF=av1 — that old
+# branch has no compositor socket.
 #
 #   git fetch origin && git checkout main
 #   mkdir -p home-test && sudo chown -R 1000:1000 home-test
@@ -25,9 +26,9 @@ services:
         SELKIES_REF: "main"
         PACKAGE_VERSION: "0.0.0.dev0"
         PIXELFLUX_FROM_GIT: "1"
-        PIXELFLUX_REF: "master"
+        PIXELFLUX_REF: "main"
         PCMFLUX_FROM_GIT: "1"
-        PCMFLUX_REF: "master"
+        PCMFLUX_REF: "main"
         ENABLE_CHAOTIC_AUR: "1"
     image: selkies-arch-lxqt-test
     environment:
