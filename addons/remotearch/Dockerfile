@@ -235,6 +235,19 @@ RUN if [ -e /tmp/selkies-web-git/index.html ] || [ -e /tmp/selkies-web-git/src/s
 RUN echo "[ ! -z \"\$TERM\" -a -r /etc/motd ] && cat /etc/motd" >> /etc/bash.bashrc && \
     printf "==============================================\n=         remotearch (Arch + LXQt)            =\n==============================================\n" > /etc/motd
 
+# GStreamer + Intel QSV / VA (qsvav1enc etc.). Selkies UI may still only list h264/jpeg.
+RUN pacman -Sy --noconfirm --needed \
+      gstreamer \
+      gst-plugins-base \
+      gst-plugins-good \
+      gst-plugins-bad \
+      gst-plugin-va \
+      gst-plugin-qsv \
+      gst-libav \
+      libvpl \
+      vpl-gpu-rt \
+    && pacman -Scc --noconfirm
+
 # Extra apps — add packages here so they survive image rebuilds
 # Emulators (PCSX2, Flycast, …): drop official AppImages in /home/arch and run from there.
 RUN pacman -Sy --noconfirm --needed \
