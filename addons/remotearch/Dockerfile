@@ -28,10 +28,9 @@ RUN mkdir -p /webout
 RUN if [ "$SELKIES_FROM_GIT" != "1" ]; then echo "skip web-build"; exit 0; fi; \
     set -eux; \
     apk add --no-cache git; \
-    git clone --filter=blob:none --sparse "${SELKIES_REPO}" /src; \
+    git init /src; \
     cd /src; \
-    git sparse-checkout set addons/selkies-web-core addons/selkies-dashboard \
-      addons/universal-touch-gamepad docs/assets; \
+    git remote add origin "${SELKIES_REPO}"; \
     git fetch --depth 1 origin "${SELKIES_REF}"; \
     git checkout FETCH_HEAD; \
     mkdir -p /build; \
@@ -66,9 +65,9 @@ RUN if [ "$SELKIES_FROM_GIT" != "1" ]; then echo "skip wheel-build"; exit 0; fi;
     set -eux; \
     apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
       && rm -rf /var/lib/apt/lists/*; \
-    git clone --filter=blob:none --sparse "${SELKIES_REPO}" /opt/selkies; \
+    git init /opt/selkies; \
     cd /opt/selkies; \
-    git sparse-checkout set src README.md pyproject.toml; \
+    git remote add origin "${SELKIES_REPO}"; \
     git fetch --depth 1 origin "${SELKIES_REF}"; \
     git checkout FETCH_HEAD; \
     mkdir -p /opt/pypi; \
