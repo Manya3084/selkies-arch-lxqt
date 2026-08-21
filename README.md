@@ -2,9 +2,9 @@
 
 Arch Linux + LXQt desktop streamed in a browser via [Selkies](https://github.com/selkies-project/selkies).
 
-One image, one `docker compose build`. No Ubuntu extract step. Aimed at Intel Arc (A750/A770) but works with AMD (Mesa RADV) and NVIDIA (with host drivers + NVIDIA Container Toolkit).
+One image, one `docker compose build`. Aimed at Intel Arc (A750/A770) but works with AMD (Mesa RADV) and NVIDIA (with host drivers + NVIDIA Container Toolkit).
 
-**Current release:** [0.1.2](CHANGELOG.md) (2026-08-19)
+**Current release:** [0.2.0](CHANGELOG.md) (2026-08-21)
 
 ## Features
 
@@ -13,8 +13,8 @@ One image, one `docker compose build`. No Ubuntu extract step. Aimed at Intel Ar
 - PipeWire audio
 - s6-overlay process supervision
 - Joystick interposer + fake-udev (from Selkies addons)
-- Optional apps in the Dockerfile (currently `dolphin-emu`)
-- Vendored Python wheels under `addons/remotearch/wheels/` for offline-friendly builds
+- Optional apps in the Dockerfile (`dolphin-emu`, `firefox`, `gvfs`)
+- **Built from git at image build time** — [Selkies](https://github.com/selkies-project/selkies) `main`, [pixelflux](https://github.com/linuxserver/pixelflux) `master`, [pcmflux](https://github.com/linuxserver/pcmflux) `master` (no vendored wheels)
 
 ## Quick start
 
@@ -23,11 +23,13 @@ git clone https://github.com/Manya3084/selkies-arch-lxqt.git
 cd selkies-arch-lxqt
 cp .env.example .env   # set PASSWD + GPU vars if needed
 mkdir -p home
-docker compose build
+docker compose build   # first build is long (Rust + Selkies web)
 docker compose up -d
 ```
 
 Open `http://<host>:3020` and log in with the password from `.env`.
+
+The first image build compiles **pixelflux** and **pcmflux** (Rust) and builds Selkies + its web client from git. Expect several minutes and a few GB of Docker disk. Later rebuilds are faster if Docker layer cache is intact. Use `docker compose build --no-cache` to force a fresh git fetch + Arch `pacman -Syu`.
 
 ## Compose layout
 
@@ -35,10 +37,40 @@ Open `http://<host>:3020` and log in with the password from `.env`.
 build:
   context: .
   dockerfile: addons/remotearch/Dockerfile
+  args:
+    SELKIES_FROM_GIT: "1"
+    SELKIES_REF: "main"
+    PIXELFLUX_FROM_GIT: "1"
+    PIXELFLUX_REF: "master"
+    PCMFLUX_FROM_GIT: "1"
+    PCMFLUX_REF: "master"
 ```
 
 - **context** must be the repo root (so `COPY addons/js-interposer` works)
-- **dockerfile** is the Arch image, not a Selkies wheel builder
+- **dockerfile** is the Arch image (`addons/remotearch/Dockerfile`)
+
+### Build args
+
+| Arg | Default (Dockerfile) | Compose | Meaning |
+|---|---|---|---|
+| `SELKIES_FROM_GIT` | `0` | `1` | Build Selkies wheel + web from git |
+| `SELKIES_REPO` | `https://github.com/selkies-project/selkies.git` | | Upstream (or your fork) |
+| `SELKIES_REF` | `main` | `main` | Branch or commit |
+| `PIXELFLUX_FROM_GIT` | `0` | `1` | Build pixelflux from git (Rust) |
+| `PIXELFLUX_REPO` | `https://github.com/linuxserver/pixelflux.git` | | |
+| `PIXELFLUX_REF` | `master` | `master` | |
+| `PCMFLUX_FROM_GIT` | `0` | `1` | Build pcmflux from git (Rust) |
+| `PCMFLUX_REPO` | `https://github.com/linuxserver/pcmflux.git` | | |
+| `PCMFLUX_REF` | `master` | `master` | |
+
+Pin a commit instead of a floating branch:
+
+```bash
+docker compose build --build-arg SELKIES_REF=<sha> \
+  --build-arg PIXELFLUX_REF=<sha> --build-arg PCMFLUX_REF=<sha>
+```
+
+Point `PIXELFLUX_REPO` / `SELKIES_REPO` at a **fork** when carrying patches (for example AV1).
 
 ## GPU setup
 
@@ -182,23 +214,6 @@ DRI_NODE=/dev/dri/renderD129
 MESA_VK_DEVICE_SELECT=8086:56a1   # or 1002:… / 10de:…
 ```
 
-## Wheels
-
-`addons/remotearch/wheels/` should contain:
-
-- `selkies-*.whl` (prefer a single file, e.g. `selkies-0.0.0.dev0-…`)
-- `pixelflux-*.whl` (optional but recommended)
-- `pcmflux-*.whl` (optional but recommended)
-
-If no `selkies-*.whl` is present, the Dockerfile falls back to `pip install selkies` from PyPI.
-
-Rebuild wheels from a working container:
-
-```bash
-docker exec <container> python -m pip wheel --no-deps -w /tmp/w selkies pixelflux pcmflux
-docker cp <container>:/tmp/w/. ./addons/remotearch/wheels/
-```
-
 ## Adding packages
 
 Edit the “Extra apps” block near the end of `addons/remotearch/Dockerfile`:
@@ -206,7 +221,8 @@ Edit the “Extra apps” block near the end of `addons/remotearch/Dockerfile`:
 ```dockerfile
 RUN pacman -Sy --noconfirm --needed \
       dolphin-emu \
-      # firefox \
+      firefox \
+      gvfs gvfs-smb \
     && pacman -Scc --noconfirm
 ```
 
