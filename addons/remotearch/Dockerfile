@@ -315,8 +315,9 @@ RUN if [ -e /tmp/selkies-web-git/index.html ] || [ -e /tmp/selkies-web-git/src/s
 RUN echo "[ ! -z \"\$TERM\" -a -r /etc/motd ] && cat /etc/motd" >> /etc/bash.bashrc && \
     printf "==============================================\n=         remotearch (Arch + LXQt)            =\n==============================================\n" > /etc/motd
 
-# GStreamer + Intel QSV / VA (qsvav1enc etc.). Selkies UI may still only list h264/jpeg.
-RUN pacman -Sy --noconfirm --needed \
+# GStreamer + Intel QSV / VA. ffmpeg may pull jack2; swap to pipewire-jack.
+RUN pacman -Rdd --noconfirm jack2 jack 2>/dev/null || true; \
+    pacman -Sy --noconfirm --needed \
       pipewire-jack \
       gstreamer \
       gst-plugins-base \
