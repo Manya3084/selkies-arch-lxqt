@@ -32,15 +32,18 @@ ARG SELKIES_REF
 ARG SELKIES_REPO
 ARG SELKIES_MODE=websockets
 ARG SELKIES_UPLOAD_DIR=/home/arch/Desktop
+COPY addons/remotearch/patches/selkies-av1enc.patch /tmp/selkies-av1enc.patch
 RUN mkdir -p /webout
 RUN if [ "$SELKIES_FROM_GIT" != "1" ]; then echo "skip web-build"; exit 0; fi; \
     set -eux; \
-    apk add --no-cache git; \
+    apk add --no-cache git patch; \
     git init /src; \
     cd /src; \
     git remote add origin "${SELKIES_REPO}"; \
     git fetch --depth 1 origin "${SELKIES_REF}"; \
     git checkout FETCH_HEAD; \
+    patch -p1 < /tmp/selkies-av1enc.patch; \
+    echo "patched selkies web sources for av1enc"; \
     mkdir -p /build; \
     cp -a addons/selkies-web-core addons/selkies-dashboard \
       addons/universal-touch-gamepad docs/assets /build/; \
@@ -68,16 +71,19 @@ ARG SELKIES_REF
 ARG SELKIES_REPO
 ARG PACKAGE_VERSION
 ARG PYPI_PACKAGE
+COPY addons/remotearch/patches/selkies-av1enc.patch /tmp/selkies-av1enc.patch
 RUN mkdir -p /dist
 RUN if [ "$SELKIES_FROM_GIT" != "1" ]; then echo "skip wheel-build"; exit 0; fi; \
     set -eux; \
-    apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    apt-get update && apt-get install -y --no-install-recommends git ca-certificates patch \
       && rm -rf /var/lib/apt/lists/*; \
     git init /opt/selkies; \
     cd /opt/selkies; \
     git remote add origin "${SELKIES_REPO}"; \
     git fetch --depth 1 origin "${SELKIES_REF}"; \
     git checkout FETCH_HEAD; \
+    patch -p1 < /tmp/selkies-av1enc.patch; \
+    echo "patched selkies wheel sources for av1enc"; \
     mkdir -p /opt/pypi; \
     cp -a src README.md pyproject.toml /opt/pypi/; \
     cd /opt/pypi; \
@@ -107,6 +113,7 @@ ARG PCMFLUX_REPO
 ENV TURBOJPEG_DYNAMIC=1
 ENV LIBCLANG_PATH=/usr/lib
 COPY addons/remotearch/patches/pixelflux-nvenc-stub.rs /tmp/nvenc-stub.rs
+COPY addons/remotearch/patches/pixelflux-av1-vaapi.patch /tmp/pixelflux-av1-vaapi.patch
 RUN mkdir -p /dist
 RUN if [ "${PIXELFLUX_FROM_GIT}" != "1" ] && [ "${PCMFLUX_FROM_GIT}" != "1" ]; then \
       echo "skip flux-wheel-build"; exit 0; \
@@ -132,6 +139,10 @@ RUN if [ "${PIXELFLUX_FROM_GIT}" != "1" ] && [ "${PCMFLUX_FROM_GIT}" != "1" ]; t
       git remote add origin "${PIXELFLUX_REPO}"; \
       git fetch --depth 1 origin "${PIXELFLUX_REF}"; \
       git checkout FETCH_HEAD; \
+      if [ -f pixelflux/src/encoders/vaapi.rs ]; then \
+        patch -p1 < /tmp/pixelflux-av1-vaapi.patch; \
+        echo "patched pixelflux master for VAAPI AV1 (output_mode=2)"; \
+      fi; \
       if [ -f pixelflux_wayland/Cargo.toml ]; then \
         sed -i \
           -e 's/ffmpeg-next = "8.0"/ffmpeg-next = "9"/' \

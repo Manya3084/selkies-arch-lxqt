@@ -1,10 +1,12 @@
 # Test stack on port 3022 — does not replace the daily container.
 # Chaotic-AUR + paru enabled.
 #
-# pixelflux is linuxserver `master` (matches Selkies main). The `av1` branch
-# does not start the capture compositor Selkies expects (no wayland-0),
-# so labwc/LXQt wait forever and the UI sits on "Waiting for stream...".
-# To retry AV1 later: PIXELFLUX_REF: av1  (needs a Selkies patch too).
+# pixelflux is linuxserver `master` (working compositor) plus
+# addons/remotearch/patches/pixelflux-av1-vaapi.patch (VAAPI av1_vaapi,
+# output_mode=2). Selkies is upstream `main` plus
+# addons/remotearch/patches/selkies-av1enc.patch so the dashboard lists
+# "AV1 (VA-API Full Frame)" and the browser decodes av01.
+# Do not use PIXELFLUX_REF=av1 — that old branch has no compositor socket.
 #
 #   git fetch origin && git checkout test/av1
 #   mkdir -p home-test && sudo chown -R 1000:1000 home-test

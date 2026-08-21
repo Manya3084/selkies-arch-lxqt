@@ -71,7 +71,15 @@ docker compose build --build-arg SELKIES_REF=<sha> \
   --build-arg PIXELFLUX_REF=<sha> --build-arg PCMFLUX_REF=<sha>
 ```
 
-Point `PIXELFLUX_REPO` / `SELKIES_REPO` at a **fork** when carrying patches (for example AV1).
+Point `PIXELFLUX_REPO` / `SELKIES_REPO` at a **fork** when carrying patches.
+
+### AV1 (Intel Arc / VA-API)
+
+The `test/av1` image patches **pixelflux master** to encode AV1 via `av1_vaapi`
+(`output_mode=2`) and patches **Selkies** so the encoder menu includes `av1enc`.
+Default encoder stays H.264 so a machine without AV1 encode still streams.
+In the dashboard pick **AV1 (VA-API Full Frame)** after the desktop is up.
+Needs Intel Arc (or other VA-API AV1 encode) on `/dev/dri`. WebRTC stays H.264.
 
 ## GPU setup
 

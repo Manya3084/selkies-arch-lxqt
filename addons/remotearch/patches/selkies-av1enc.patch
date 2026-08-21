@@ -1,0 +1,292 @@
+diff --git a/addons/selkies-dashboard-wish/src/components/dashboard/settings.tsx b/addons/selkies-dashboard-wish/src/components/dashboard/settings.tsx
+index fc4671b..4e44a62 100644
+--- a/addons/selkies-dashboard-wish/src/components/dashboard/settings.tsx
++++ b/addons/selkies-dashboard-wish/src/components/dashboard/settings.tsx
+@@ -74,6 +74,7 @@ const encoderOptions = [
+     "h264enc",
+     "openh264enc",
+     "h264enc-striped",
++    "av1enc",
+     "jpeg",
+ ];
+ 
+@@ -86,7 +87,7 @@ const encoderOptionsRTC = [
+ ];
+ 
+ // Every H.264 encoder supports both CBR and CRF (constant-QP) rate control.
+-const H264_ENCODERS = ["h264enc", "h264enc-striped", "openh264enc", "nvh264enc"];
++const H264_ENCODERS = ["h264enc", "h264enc-striped", "openh264enc", "nvh264enc", "av1enc"];
+ 
+ const FRAMERATE_STEPS = [8, 12, 15, 24, 25, 30, 48, 50, 60, 90, 100, 120, 144, 165, 240];
+ 
+diff --git a/addons/selkies-dashboard/src/components/Sidebar.jsx b/addons/selkies-dashboard/src/components/Sidebar.jsx
+index 58ff1d3..3b205cd 100644
+--- a/addons/selkies-dashboard/src/components/Sidebar.jsx
++++ b/addons/selkies-dashboard/src/components/Sidebar.jsx
+@@ -43,6 +43,7 @@ const encoderOptions = [
+   "h264enc",
+   "openh264enc",
+   "h264enc-striped",
++  "av1enc",
+   "jpeg",
+ ];
+ 
+@@ -2579,12 +2580,13 @@ function Sidebar() {
+ 
+   // The encoder relevant to the active transport; CBR/CRF applies to every H.264 encoder on both.
+   const activeEncoder = encoder;
+-  const H264_ENCODERS = ["h264enc", "h264enc-striped", "openh264enc", "nvh264enc"];
++  const H264_ENCODERS = ["h264enc", "h264enc-striped", "openh264enc", "nvh264enc", "av1enc"];
+   const showFPS = [
+     "jpeg",
+     "h264enc-striped",
+     "h264enc",
+     "openh264enc",
++    "av1enc",
+   ].includes(encoder);
+   const showCRF = H264_ENCODERS.includes(activeEncoder);
+   const showH264Options = H264_ENCODERS.includes(activeEncoder);
+diff --git a/addons/selkies-web-core/lib/conditional-settings.js b/addons/selkies-web-core/lib/conditional-settings.js
+index dd68921..dd06b51 100644
+--- a/addons/selkies-web-core/lib/conditional-settings.js
++++ b/addons/selkies-web-core/lib/conditional-settings.js
+@@ -13,6 +13,7 @@ export const ENCODER_RC_DEFAULTS = {
+     "h264enc": "crf",
+     "openh264enc": "cbr",
+     "h264enc-striped": "crf",
++    "av1enc": "crf",
+     "jpeg": "crf",
+ };
+ 
+diff --git a/addons/selkies-web-core/lib/util.js b/addons/selkies-web-core/lib/util.js
+index ad042cb..1a1ade2 100644
+--- a/addons/selkies-web-core/lib/util.js
++++ b/addons/selkies-web-core/lib/util.js
+@@ -64,6 +64,7 @@ export const DISPLAY_LABELS = {
+     h264enc: "H.264 (Full Frame)",
+     "h264enc-striped": "H.264 (Striped Frame)",
+     openh264enc: "H.264 (OpenH264)",
++    av1enc: "AV1 (VA-API Full Frame)",
+     jpeg: "JPEG (Striped Frame)",
+     cbr: "CBR (Constant Bitrate)",
+     crf: "CRF (Constant Quality)",
+diff --git a/addons/selkies-web-core/selkies-ws-core.js b/addons/selkies-web-core/selkies-ws-core.js
+index da89eb7..727dfe6 100644
+--- a/addons/selkies-web-core/selkies-ws-core.js
++++ b/addons/selkies-web-core/selkies-ws-core.js
+@@ -1304,6 +1304,17 @@ const getDynamicH264Codec = (width, height, is444, fps) => {
+   return `avc1.${profile}${level}`;
+ };
+ 
++const AV1_WEBCODECS = 'av01.0.04M.08';
++const isAv1Encoder = (mode) => mode === 'av1enc';
++const isFullFrameVideoEncoder = (mode) =>
++  mode === 'h264enc' || mode === 'openh264enc' || mode === 'av1enc';
++const isVideoStreamEncoder = (mode) =>
++  isFullFrameVideoEncoder(mode) || mode === 'h264enc-striped';
++const codecForCurrentEncoder = (width, height, is444, fps) =>
++  isAv1Encoder(currentEncoderMode)
++    ? AV1_WEBCODECS
++    : getDynamicH264Codec(width, height, is444, fps);
++
+ // Parse the codec from the stream's actual SPS (Chromium WebCodecs) instead of
+ // guessing from width*height*fps: scan an Annex-B keyframe for the first SPS NAL
+ // and build "avc1.PPCCLL". Returns null if none found (caller uses the heuristic).
+@@ -1365,6 +1376,7 @@ const codecFromKeyframe = (keyframeBytes, fallback) => {
+ // from the current config. Returns true if reconfigured. The caller decodes that
+ // keyframe right after (WebCodecs requires a keyframe post-configure).
+ const maybeReconfigureMainDecoderFromSps = (keyframeBytes) => {
++  if (isAv1Encoder(currentEncoderMode)) return false;
+   if (!isChromium) return false;
+   if (!decoder || decoder.state !== 'configured') return false;
+   const spsCodec = parseAvcCodecFromAnnexB(keyframeBytes);
+@@ -2095,7 +2107,7 @@ function clearAllVncStripeDecoders() {
+ const STRIPE_SOFT_ERROR_WINDOW_MS = 10000;
+ function handleStripeDecodeError(e, vncStripeYStart) {
+     if (decodeInWorker && !workerDecodeFailed &&
+-        (currentEncoderMode === 'h264enc' || currentEncoderMode === 'openh264enc')) {
++        (isFullFrameVideoEncoder(currentEncoderMode))) {
+         const now = performance.now();
+         const prev = stripeDecodeSoftErrors[vncStripeYStart];
+         const soft = (prev && now - prev.last <= STRIPE_SOFT_ERROR_WINDOW_MS) ? prev.count + 1 : 1;
+@@ -2265,7 +2277,7 @@ function handleDecodedVncStripeFrame(yPos, frame) {
+   // for the lowest glass-to-glass latency, instead of parking it in the queue for the
+   // next rAF. h264enc-striped composites partial-height stripes on the 2D canvas and so
+   // still drains through the rAF path below.
+-  if (!isSharedMode && (currentEncoderMode === 'h264enc' || currentEncoderMode === 'openh264enc') && yPos === 0) {
++  if (!isSharedMode && (isFullFrameVideoEncoder(currentEncoderMode)) && yPos === 0) {
+     if (document.hidden || (clientMode === 'websockets' && !isVideoPipelineActive)) {
+       try { frame.close(); } catch (e) {}
+       return;
+@@ -2815,7 +2827,7 @@ function receiveMessage(event) {
+       disableAutoResize();
+       sendResolutionToServer(manual_width, manual_height);
+       applyManualCanvasStyle(manual_width, manual_height, scaleLocallyManual);
+-      if (currentEncoderMode === 'h264enc' || currentEncoderMode === 'openh264enc' || currentEncoderMode === 'h264enc-striped') {
++      if (isVideoStreamEncoder(currentEncoderMode)) {
+         console.log("Clearing VNC stripe decoders due to manual resolution change.");
+         clearAllVncStripeDecoders();
+         if (canvasContext) canvasContext.setTransform(1, 0, 0, 1, 0, 0);
+@@ -2842,7 +2854,7 @@ function receiveMessage(event) {
+         const autoWidth = alignResolution(currentWindowRes[0]);
+         const autoHeight = alignResolution(currentWindowRes[1]);
+         resetCanvasStyle(autoWidth, autoHeight);
+-        if (currentEncoderMode === 'h264enc' || currentEncoderMode === 'openh264enc' || currentEncoderMode === 'h264enc-striped') {
++        if (isVideoStreamEncoder(currentEncoderMode)) {
+           console.log("Clearing VNC stripe decoders due to resolution reset to window.");
+           clearAllVncStripeDecoders();
+           if (canvasContext) canvasContext.setTransform(1, 0, 0, 1, 0, 0);
+@@ -3199,7 +3211,7 @@ function handleSettingsMessage(settings, fromServer) {
+         currentEncoderMode = newEncoderSetting;
+         storeString('encoder', currentEncoderMode);
+         settingsChanged = true;
+-        if (newEncoderSetting === 'jpeg' || newEncoderSetting === 'h264enc' || newEncoderSetting === 'openh264enc' || newEncoderSetting === 'h264enc-striped') {
++        if (newEncoderSetting === 'jpeg' || isVideoStreamEncoder(newEncoderSetting)) {
+             if (decoder && decoder.state !== 'closed') {
+                 console.log(`Switching to ${newEncoderSetting}, closing main video decoder.`);
+                 decoder.close();
+@@ -3419,7 +3431,7 @@ function initWebsockets() {
+       output: handleDecodedFrame,
+       error: (e) => initiateFallback(e, 'main_decoder'),
+     });
+-    const dynamicCodec = getDynamicH264Codec(actualCodedWidth, actualCodedHeight, video_fullcolor, framerate);
++    const dynamicCodec = codecForCurrentEncoder(actualCodedWidth, actualCodedHeight, video_fullcolor, framerate);
+     const baseConfig = {
+       codec: dynamicCodec,
+       codedWidth: actualCodedWidth,
+@@ -3753,7 +3765,7 @@ function initWebsockets() {
+     let videoPaintedThisFrame = false;
+     let jpegPaintedThisFrame = false;
+ 
+-    if (!isSharedMode && (currentEncoderMode === 'h264enc' || currentEncoderMode === 'openh264enc')) {
++    if (!isSharedMode && (isFullFrameVideoEncoder(currentEncoderMode))) {
+       // Full-frame H.264 (NVENC/x264 'h264enc', OpenH264 'openh264enc'): present the
+       // freshest frame via the zero-copy <video> track generator (Chromium/Safari) or
+       // the OffscreenCanvas worker (Firefox), falling back to the 2D canvas. One
+@@ -4624,7 +4636,7 @@ function initWebsockets() {
+         // the main-thread stripe decoder while the worker is still handshaking or if worker
+         // decode has failed. h264enc-striped composites partial stripes on the 2D canvas,
+         // so it always decodes on the main thread.
+-        if (decodeInWorker && (currentEncoderMode === 'h264enc' || currentEncoderMode === 'openh264enc') && isVideoPipelineActive) {
++        if (decodeInWorker && (isFullFrameVideoEncoder(currentEncoderMode)) && isVideoPipelineActive) {
+             if (h264Payload.byteLength === 0) return;
+             // The SPS-based codec is derived on keyframes and cached; deltas reuse it
+             // so the worker decoder is not reconfigured (dropping its keyframe state)
+@@ -4633,20 +4645,22 @@ function initWebsockets() {
+             // string oscillation reconfigures the decoder AND fires requestKeyframe()
+             // on every boundary — which drops decoded state and stalls playback into
+             // a slideshow of keyframes).
+-            if (video_frame_type_byte === 0x01) {
++            if (video_frame_type_byte === 0x01 && !isAv1Encoder(currentEncoderMode)) {
+                 const spsCodec = codecFromKeyframe(h264Payload, null);
+                 if (spsCodec && spsCodec !== workerKeyframeCodec) {
+                     workerKeyframeCodec = spsCodec;
+                 }
+             }
+-            const workerCodec = workerKeyframeCodec || getDynamicH264Codec(stripeWidth, stripeHeight, video_fullcolor, framerate);
++            const workerCodec = isAv1Encoder(currentEncoderMode)
++                ? AV1_WEBCODECS
++                : (workerKeyframeCodec || getDynamicH264Codec(stripeWidth, stripeHeight, video_fullcolor, framerate));
+             if (feedWorkerDecoder(video_frame_type_byte === 0x01, h264Payload, stripeWidth, stripeHeight, workerCodec)) {
+                 return;
+             }
+         }
+ 
+         const canProcessVncStripe =
+-            (!isSharedMode && isVideoPipelineActive && (currentEncoderMode === 'h264enc' || currentEncoderMode === 'openh264enc' || currentEncoderMode === 'h264enc-striped')) ||
++            (!isSharedMode && isVideoPipelineActive && (isVideoStreamEncoder(currentEncoderMode))) ||
+             (isSharedMode && currentEncoderMode === 'h264enc-striped');
+ 
+         if (canProcessVncStripe) {
+@@ -4670,13 +4684,13 @@ function initWebsockets() {
+                     output: handleDecodedVncStripeFrame.bind(null, vncStripeYStart),
+                     error: (e) => handleStripeDecodeError(e, vncStripeYStart)
+                 });
+-                let dynamicCodec = getDynamicH264Codec(stripeWidth, stripeHeight, video_fullcolor, framerate);
++                let dynamicCodec = codecForCurrentEncoder(stripeWidth, stripeHeight, video_fullcolor, framerate);
+                 // Decoder (re)creation is only ever triggered ON a keyframe —
+                 // the delta path above short-circuits with requestKeyframe() —
+                 // so the SPS is in hand here; configure the stream's real codec.
+                 // Safari hard-rejects a baseline guess against a High-profile
+                 // stream where Chromium silently adapts.
+-                if (video_frame_type_byte === 0x01) {
++                if (video_frame_type_byte === 0x01 && !isAv1Encoder(currentEncoderMode)) {
+                     dynamicCodec = codecFromKeyframe(h264Payload, dynamicCodec);
+                 }
+                 const decoderConfig = decoderConfigFor({
+@@ -5143,7 +5157,7 @@ function initWebsockets() {
+             if (obj.video !== undefined && obj.video !== isVideoPipelineActive) {
+               isVideoPipelineActive = obj.video;
+               statusChanged = true;
+-              if (!isVideoPipelineActive && (currentEncoderMode === 'h264enc' || currentEncoderMode === 'openh264enc' || currentEncoderMode === 'h264enc-striped') && !isSharedMode) {
++              if (!isVideoPipelineActive && (isVideoStreamEncoder(currentEncoderMode)) && !isSharedMode) {
+                   clearAllVncStripeDecoders();
+               }
+             }
+@@ -6115,7 +6129,7 @@ function performServerInitiatedVideoReset(reason = "unknown") {
+   cleanupJpegStripeQueue();
+   clearDecodedStripesQueue();
+ 
+-  if (currentEncoderMode === 'h264enc' || currentEncoderMode === 'openh264enc' || currentEncoderMode === 'h264enc-striped') {
++  if (isVideoStreamEncoder(currentEncoderMode)) {
+     clearAllVncStripeDecoders();
+   } else if (currentEncoderMode !== 'jpeg') {
+     if (decoder && decoder.state !== 'closed') {
+@@ -6126,7 +6140,7 @@ function performServerInitiatedVideoReset(reason = "unknown") {
+     console.log("  Main video decoder instance set to null.");
+   }
+ 
+-  if (canvasContext && canvas && !(currentEncoderMode === 'h264enc' || currentEncoderMode === 'openh264enc' || currentEncoderMode === 'h264enc-striped')) {
++  if (canvasContext && canvas && !(isVideoStreamEncoder(currentEncoderMode))) {
+     try {
+       canvasContext.setTransform(1, 0, 0, 1, 0, 0);
+       canvasContext.clearRect(0, 0, canvas.width, canvas.height);
+diff --git a/src/selkies/display_utils.py b/src/selkies/display_utils.py
+index 267ed73..68389b6 100644
+--- a/src/selkies/display_utils.py
++++ b/src/selkies/display_utils.py
+@@ -2292,7 +2292,7 @@ def apply_common_capture_settings(
+     cs.video_paintover_burst_frames = paintover_burst
+     cs.video_fullcolor = fullcolor
+     cs.video_streaming_mode = streaming
+-    cs.video_fullframe = encoder in ("h264enc", "openh264enc")
++    cs.video_fullframe = encoder in ("h264enc", "openh264enc", "av1enc")
+     cs.use_openh264 = encoder == "openh264enc"
+     cs.video_cbr_mode = cbr
+     cs.video_bitrate_kbps = int(round(float(bitrate_kbps)))
+diff --git a/src/selkies/selkies.py b/src/selkies/selkies.py
+index fad6d5a..e8e4197 100644
+--- a/src/selkies/selkies.py
++++ b/src/selkies/selkies.py
+@@ -141,7 +141,7 @@ AUDIO_CHANNELS_DEFAULT = 2
+ # override reaches here as an arbitrary numeric string: parse it as a float
+ # before narrowing, or a fractional in-range value aborts module import.
+ AUDIO_BITRATE_DEFAULT = int(float(settings.audio_bitrate))
+-PIXELFLUX_VIDEO_ENCODERS = ["jpeg", "h264enc", "h264enc-striped", "openh264enc"]
++PIXELFLUX_VIDEO_ENCODERS = ["jpeg", "h264enc", "h264enc-striped", "openh264enc", "av1enc"]
+ 
+ LOGLEVEL = logging.INFO
+ logging.basicConfig(level=LOGLEVEL)
+@@ -5395,6 +5395,9 @@ class DataStreamingServer(BaseStreamingService):
+             cs.output_mode = 0
+             cs.jpeg_quality = display_state.get('jpeg_quality', self._initial_jpeg_quality)
+             cs.paint_over_jpeg_quality = display_state.get('paint_over_jpeg_quality', self._initial_paint_over_jpeg_quality)
++        elif encoder == "av1enc":
++            # pixelflux: 2 = AV1 (VA-API av1_vaapi). Full-frame only.
++            cs.output_mode = 2
+         else:
+             cs.output_mode = 1
+         # Zero-copy delivery: aiohttp may retain a memoryview of the encoded buffer past
+diff --git a/src/selkies/settings.py b/src/selkies/settings.py
+index 62f1388..2a34869 100644
+--- a/src/selkies/settings.py
++++ b/src/selkies/settings.py
+@@ -583,7 +583,7 @@ SETTING_DEFINITIONS: List[Dict[str, Any]] = [
+         "name": "encoder",
+         "type": "enum",
+         "default": "h264enc",
+-        "meta": {"allowed": ["h264enc", "openh264enc", "h264enc-striped", "jpeg"]},
++        "meta": {"allowed": ["h264enc", "openh264enc", "h264enc-striped", "jpeg", "av1enc"]},
+         "help": "The default video encoder.",
+     },
+     {
