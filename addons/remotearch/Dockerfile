@@ -105,6 +105,7 @@ ARG PCMFLUX_FROM_GIT
 ARG PCMFLUX_REF
 ARG PCMFLUX_REPO
 ENV TURBOJPEG_DYNAMIC=1
+ENV LIBCLANG_PATH=/usr/lib
 RUN mkdir -p /dist
 RUN if [ "${PIXELFLUX_FROM_GIT}" != "1" ] && [ "${PCMFLUX_FROM_GIT}" != "1" ]; then \
       echo "skip flux-wheel-build"; exit 0; \
@@ -114,7 +115,7 @@ RUN if [ "${PIXELFLUX_FROM_GIT}" != "1" ] && [ "${PCMFLUX_FROM_GIT}" != "1" ]; t
       base-devel git rust pkgconf cmake nasm \
       python python-pip python-setuptools python-wheel \
       python-setuptools-rust \
-      clang lld \
+      clang lld llvm \
       x264 libjpeg-turbo libpng libyuv \
       libva libva-mesa-driver intel-media-driver \
       ffmpeg \
@@ -130,6 +131,14 @@ RUN if [ "${PIXELFLUX_FROM_GIT}" != "1" ] && [ "${PCMFLUX_FROM_GIT}" != "1" ]; t
       git remote add origin "${PIXELFLUX_REPO}"; \
       git fetch --depth 1 origin "${PIXELFLUX_REF}"; \
       git checkout FETCH_HEAD; \
+      if [ -f pixelflux_wayland/Cargo.toml ]; then \
+        sed -i \
+          -e 's/ffmpeg-next = "8.0"/ffmpeg-next = "9"/' \
+          -e 's/ffmpeg-sys-next = "8.0"/ffmpeg-sys-next = "9"/' \
+          -e 's/features = \["cuda"\]/features = []/' \
+          pixelflux_wayland/Cargo.toml; \
+        echo "patched pixelflux Cargo.toml (ffmpeg-sys 9, no CUDA)"; \
+      fi; \
       python3 -m build --wheel --outdir /dist; \
     fi && \
     if [ "${PCMFLUX_FROM_GIT}" = "1" ]; then \
