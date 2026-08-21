@@ -1,13 +1,12 @@
-# Test stack: Selkies built from upstream main (or pinned SELKIES_REF).
+# Test stack: Selkies + pixelflux + pcmflux built from upstream git.
 # Does not replace the daily container (port 3022, separate image/name/home).
 #
-#   git fetch origin && git checkout test/selkies-from-main
 #   mkdir -p home-test && sudo chown -R 1000:1000 home-test
 #   docker compose -f docker-compose.test.yml build --no-cache
 #   docker compose -f docker-compose.test.yml up -d
 #   curl -sI http://127.0.0.1:3022/
 #
-# Pin a commit instead of floating main:
+# Pin a commit instead of floating main/master:
 #   docker compose -f docker-compose.test.yml build --build-arg SELKIES_REF=<sha>
 
 services:
@@ -20,6 +19,10 @@ services:
         SELKIES_FROM_GIT: "1"
         SELKIES_REF: "main"
         PACKAGE_VERSION: "0.0.0.dev0"
+        PIXELFLUX_FROM_GIT: "1"
+        PIXELFLUX_REF: "master"
+        PCMFLUX_FROM_GIT: "1"
+        PCMFLUX_REF: "master"
     image: selkies-arch-lxqt-test
     environment:
       SELKIES_MODE: websockets
