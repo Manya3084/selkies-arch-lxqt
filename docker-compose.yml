@@ -5,10 +5,14 @@ services:
       context: .
       dockerfile: addons/remotearch/Dockerfile
       args:
-        # Build Selkies wheel + web from upstream (no manual wheel extract)
+        # Build Selkies + pixelflux + pcmflux from upstream (no manual wheel extract)
         SELKIES_FROM_GIT: "1"
         SELKIES_REF: "main"
         PACKAGE_VERSION: "0.0.0.dev0"
+        PIXELFLUX_FROM_GIT: "1"
+        PIXELFLUX_REF: "master"
+        PCMFLUX_FROM_GIT: "1"
+        PCMFLUX_REF: "master"
     image: selkies-arch-lxqt
     environment:
       SELKIES_MODE: websockets
