@@ -14,6 +14,7 @@ One image, one `docker compose build`. Aimed at Intel Arc (A750/A770) but works 
 - s6-overlay process supervision
 - Joystick interposer + fake-udev (from Selkies addons)
 - Optional apps in the Dockerfile (`dolphin-emu`, `firefox`, `gvfs`)
+- Extra pacman packages from a **persistent list** (reinstalled on each start, no Dockerfile edit)
 - **Built from git at image build time** — [Selkies](https://github.com/selkies-project/selkies) `main`, [pixelflux](https://github.com/linuxserver/pixelflux) `master`, [pcmflux](https://github.com/linuxserver/pcmflux) `master` (no vendored wheels)
 
 ## Quick start
@@ -216,7 +217,43 @@ MESA_VK_DEVICE_SELECT=8086:56a1   # or 1002:… / 10de:…
 
 ## Adding packages
 
-Edit the “Extra apps” block near the end of `addons/remotearch/Dockerfile`:
+`pacman -S` inside a running container is **lost on the next image rebuild** (`/usr` is not a volume). Use one of these instead.
+
+### Persistent extra list (no Dockerfile edit)
+
+On the host (lives in `./home`, already bind-mounted):
+
+```bash
+mkdir -p home/.config
+cat >> home/.config/pacman-packages << 'EOF'
+mpv
+htop
+EOF
+```
+
+Or from a terminal **inside** the desktop:
+
+```bash
+mkdir -p ~/.config
+echo mpv >> ~/.config/pacman-packages
+```
+
+Restart the container (`docker compose up -d`). The entrypoint runs `pacman -Sy --needed` for that list before the desktop starts. Already-installed packages are skipped. Needs network on start.
+
+You can also set compose env (space-separated):
+
+```yaml
+environment:
+  PACMAN_PACKAGES: "mpv htop"
+```
+
+Example file: [`addons/remotearch/pacman-packages.example`](addons/remotearch/pacman-packages.example).
+
+**This is not AUR.** Official repos only. AppImages dropped in `/home/arch` already persist.
+
+### Baked into the image
+
+For packages everyone should get, edit the “Extra apps” block in `addons/remotearch/Dockerfile`:
 
 ```dockerfile
 RUN pacman -Sy --noconfirm --needed \
