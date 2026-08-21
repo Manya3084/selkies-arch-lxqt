@@ -2,9 +2,89 @@
 #
 # remotearch — Arch + LXQt (Intel Arc)
 # MPL-2.0 — https://mozilla.org/MPL/2.0/
+#
+# Optional: build Selkies from upstream main (pinned ref)
+#   docker compose -f docker-compose.test.yml build --no-cache
+#   (sets SELKIES_FROM_GIT=1)
+# Default offline path: addons/remotearch/wheels/
 
 ARG PYPI_PACKAGE=selkies
 ARG S6_OVERLAY_VERSION=3.2.1.0
+ARG SELKIES_FROM_GIT=0
+ARG SELKIES_REF=main
+ARG SELKIES_REPO=https://github.com/selkies-project/selkies.git
+ARG PACKAGE_VERSION=0.0.0.dev0
+
+# ---------------------------------------------------------------------------
+# Optional upstream web + wheel (empty /webout and /dist when SELKIES_FROM_GIT!=1)
+# ---------------------------------------------------------------------------
+FROM docker.io/library/node:26-alpine AS selkies-web-build
+ARG SELKIES_FROM_GIT
+ARG SELKIES_REF
+ARG SELKIES_REPO
+ARG SELKIES_MODE=websockets
+ARG SELKIES_UPLOAD_DIR=/home/arch/Desktop
+RUN mkdir -p /webout
+RUN if [ "$SELKIES_FROM_GIT" != "1" ]; then echo "skip web-build"; exit 0; fi; \
+    set -eux; \
+    apk add --no-cache git; \
+    git init /src; \
+    cd /src; \
+    git remote add origin "${SELKIES_REPO}"; \
+    git fetch --depth 1 origin "${SELKIES_REF}"; \
+    git checkout FETCH_HEAD; \
+    mkdir -p /build; \
+    cp -a addons/selkies-web-core addons/selkies-dashboard \
+      addons/universal-touch-gamepad docs/assets /build/; \
+    cd /build/selkies-web-core; \
+    npm install --no-audit --no-fund; \
+    npm run build; \
+    cd /build/selkies-dashboard; \
+    cp /build/selkies-web-core/dist/selkies-core.js src/; \
+    npm install --no-audit --no-fund; \
+    SELKIES_INJECT=1 SELKIES_MODE="${SELKIES_MODE}" \
+      SELKIES_UPLOAD_DIR="${SELKIES_UPLOAD_DIR}" npm run build; \
+    mkdir -p dist/src; \
+    cp /build/selkies-web-core/dist/selkies-core.js dist/src/; \
+    cp /build/universal-touch-gamepad/universalTouchGamepad.js dist/src/; \
+    cp -r /build/selkies-web-core/dist/jsdb dist/; \
+    cp -ar dist/. /webout/; \
+    cp /build/assets/logo/icon-512x512.png /webout/icon-512.png; \
+    cp /build/assets/logo/favicon.ico /webout/favicon.ico; \
+    printf '%s' '{"name":"Selkies","short_name":"Selkies","display":"fullscreen","background_color":"#000000","theme_color":"#000000","icons":[{"src":"icon-512.png","type":"image/png","sizes":"512x512"}],"start_url":"."}' \
+      > /webout/manifest.json
+
+FROM docker.io/library/python:3-slim AS selkies-wheel-build
+ARG SELKIES_FROM_GIT
+ARG SELKIES_REF
+ARG SELKIES_REPO
+ARG PACKAGE_VERSION
+ARG PYPI_PACKAGE
+RUN mkdir -p /dist
+RUN if [ "$SELKIES_FROM_GIT" != "1" ]; then echo "skip wheel-build"; exit 0; fi; \
+    set -eux; \
+    apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+      && rm -rf /var/lib/apt/lists/*; \
+    git init /opt/selkies; \
+    cd /opt/selkies; \
+    git remote add origin "${SELKIES_REPO}"; \
+    git fetch --depth 1 origin "${SELKIES_REF}"; \
+    git checkout FETCH_HEAD; \
+    mkdir -p /opt/pypi; \
+    cp -a src README.md pyproject.toml /opt/pypi/; \
+    cd /opt/pypi; \
+    rm -rf src/selkies/selkies_web; \
+    mkdir -p src/selkies/selkies_web
+COPY --from=selkies-web-build /webout/ /tmp/webout/
+RUN if [ "$SELKIES_FROM_GIT" != "1" ]; then exit 0; fi; \
+    set -eux; \
+    cp -a /tmp/webout/. /opt/pypi/src/selkies/selkies_web/; \
+    cd /opt/pypi; \
+    sed -i -e "s|^name =.*|name = \"${PYPI_PACKAGE}\"|" \
+           -e "s|^version =.*|version = \"${PACKAGE_VERSION}\"|" pyproject.toml; \
+    python3 -m pip install --no-cache-dir --upgrade build; \
+    python3 -m build; \
+    cp -a dist/*.whl /dist/
 
 # Joystick interposer + fake-udev
 FROM archlinux:latest AS add-ons
@@ -99,14 +179,17 @@ RUN mkdir -p /etc/xdg/lxqt /etc/xdg/pcmanfm-qt/lxqt && \
         "${TERMINAL}" > /etc/xdg/pcmanfm-qt/lxqt/settings.conf; \
     printf 'TerminalEmulator=%s.desktop\n' "${TERMINAL}" > /etc/xdg/qtxdg.conf
 
-# Selkies from wheels/ or PyPI
-# Prefer a single selkies wheel: .dev0 first, else any selkies-*.whl, else PyPI.
-# Web UI is NOT in this wheel — see COPY of selkies-web below.
+# Selkies: local wheels, overlaid by git-built wheel when SELKIES_FROM_GIT=1
 COPY addons/remotearch/wheels/ /tmp/wheels/
+COPY --from=selkies-wheel-build /dist/ /tmp/wheels-git/
 RUN pacman -Sy --noconfirm --needed \
       python python-pip python-evdev \
       base-devel linux-api-headers && \
     set -e; \
+    if ls /tmp/wheels-git/selkies-*.whl >/dev/null 2>&1; then \
+      cp -a /tmp/wheels-git/selkies-*.whl /tmp/wheels/; \
+      echo "Using Selkies wheel from git build"; \
+    fi; \
     SELKIES_WHL="$(ls -1 /tmp/wheels/selkies-0.0.0.dev0-*.whl 2>/dev/null | head -1 || true)"; \
     if [ -z "${SELKIES_WHL}" ]; then \
       SELKIES_WHL="$(ls -1 /tmp/wheels/selkies-*.whl 2>/dev/null | head -1 || true)"; \
@@ -126,7 +209,7 @@ RUN pacman -Sy --noconfirm --needed \
     (command -v selkies-resize >/dev/null || \
       find /usr -name 'selkies-resize' 2>/dev/null | head -1 | \
       xargs -r -I{} ln -sf {} /usr/local/bin/selkies-resize) || true; \
-    rm -rf /tmp/wheels
+    rm -rf /tmp/wheels /tmp/wheels-git
 
 COPY --from=add-ons /opt/add-ons/lib/ /usr/lib/
 
@@ -134,14 +217,35 @@ COPY --chown=1000:1000 addons/remotearch/labwc-rc.xml /etc/xdg/labwc/rc.xml
 COPY --chown=1000:1000 addons/remotearch/container-entrypoint.sh /etc/container-entrypoint.sh
 COPY --chown=1000:1000 addons/remotearch/selkies-entrypoint.sh /etc/selkies-entrypoint.sh
 COPY --chown=1000:1000 addons/remotearch/services/ /etc/service/
-# HTML5 client (not inside the vendored wheel — see addons/remotearch/selkies-web/README.md)
+# Vendored web client; overwritten by git webout when present
 COPY addons/remotearch/selkies-web/ /opt/selkies-web/
-RUN chmod -f 755 /etc/container-entrypoint.sh /etc/selkies-entrypoint.sh && \
+COPY --from=selkies-web-build /webout/ /tmp/selkies-web-git/
+RUN if [ -e /tmp/selkies-web-git/index.html ] || [ -e /tmp/selkies-web-git/src/selkies-core.js ] || \
+       ls /tmp/selkies-web-git/*.js >/dev/null 2>&1; then \
+      rm -rf /opt/selkies-web/*; \
+      cp -a /tmp/selkies-web-git/. /opt/selkies-web/; \
+      echo "Using selkies-web from git build"; \
+    fi; \
+    rm -rf /tmp/selkies-web-git; \
+    chmod -f 755 /etc/container-entrypoint.sh /etc/selkies-entrypoint.sh && \
     find /etc/service \( -name run -o -name finish \) -exec chmod -f 755 {} + && \
     chmod 4755 /usr/bin/sudo 2>/dev/null || true
 
 RUN echo "[ ! -z \"\$TERM\" -a -r /etc/motd ] && cat /etc/motd" >> /etc/bash.bashrc && \
     printf "==============================================\n=         remotearch (Arch + LXQt)            =\n==============================================\n" > /etc/motd
+
+# GStreamer + Intel QSV / VA (qsvav1enc etc.). Selkies UI may still only list h264/jpeg.
+RUN pacman -Sy --noconfirm --needed \
+      gstreamer \
+      gst-plugins-base \
+      gst-plugins-good \
+      gst-plugins-bad \
+      gst-plugin-va \
+      gst-plugin-qsv \
+      gst-libav \
+      libvpl \
+      vpl-gpu-rt \
+    && pacman -Scc --noconfirm
 
 # Extra apps — add packages here so they survive image rebuilds
 # Emulators (PCSX2, Flycast, …): drop official AppImages in /home/arch and run from there.

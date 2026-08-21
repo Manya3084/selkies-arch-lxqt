@@ -1,0 +1,54 @@
+# Test stack: Selkies built from upstream main (or pinned SELKIES_REF).
+# Does not replace the daily container (port 3022, separate image/name/home).
+#
+#   git fetch origin && git checkout test/selkies-from-main
+#   mkdir -p home-test && sudo chown -R 1000:1000 home-test
+#   docker compose -f docker-compose.test.yml build --no-cache
+#   docker compose -f docker-compose.test.yml up -d
+#   curl -sI http://127.0.0.1:3022/
+#
+# Pin a commit instead of floating main:
+#   docker compose -f docker-compose.test.yml build --build-arg SELKIES_REF=<sha>
+
+services:
+  selkies:
+    container_name: selkies-arch-lxqt-test
+    build:
+      context: .
+      dockerfile: addons/remotearch/Dockerfile
+      args:
+        SELKIES_FROM_GIT: "1"
+        SELKIES_REF: "main"
+        PACKAGE_VERSION: "0.0.0.dev0"
+    image: selkies-arch-lxqt-test
+    environment:
+      SELKIES_MODE: websockets
+      SELKIES_ENABLE_DUAL_MODE: "false"
+      SELKIES_PORT: "8080"
+      START_LXQT: "true"
+      SELKIES_WAYLAND: "true"
+      SELKIES_WEB_ROOT: /opt/selkies-web
+      SELKIES_AUDIO_BITRATE: "320000"
+      SELKIES_AUDIO_DEVICE_NAME: output.monitor
+      PASSWD: "${PASSWD:-changeme}"
+      DRI_NODE: ${DRI_NODE:-/dev/dri/renderD128}
+      MESA_VK_DEVICE_SELECT: ${MESA_VK_DEVICE_SELECT:-8086:56a1}
+      VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/intel_icd.json
+      SELKIES_WAYLAND_COMPOSITOR: labwc
+      DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/tmp/runtime-arch/dbus-system-bus"
+      SELKIES_WAYLAND_OUTPUTS: "1"
+      PIPEWIRE_LATENCY: "512/48000"
+    cpuset: "12-23,36-47"
+    ports:
+      - "3022:8080"
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/fuse:/dev/fuse
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - ./home-test:/home/arch
+    shm_size: "2gb"
+    restart: unless-stopped
