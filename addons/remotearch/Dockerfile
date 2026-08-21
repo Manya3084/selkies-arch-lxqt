@@ -3,9 +3,8 @@
 # remotearch — Arch + LXQt (Intel Arc)
 # MPL-2.0 — https://mozilla.org/MPL/2.0/
 #
-# Optional: build Selkies from upstream main (pinned ref)
-#   docker compose -f docker-compose.test.yml build --no-cache
-#   (sets SELKIES_FROM_GIT=1)
+# Optional: build Selkies / pixelflux / pcmflux from upstream git
+#   docker compose build  (compose sets *_FROM_GIT=1)
 # Default offline path: addons/remotearch/wheels/
 
 ARG PYPI_PACKAGE=selkies
@@ -15,8 +14,16 @@ ARG SELKIES_REF=main
 ARG SELKIES_REPO=https://github.com/selkies-project/selkies.git
 ARG PACKAGE_VERSION=0.0.0.dev0
 
+# pixelflux / pcmflux from git (Rust native wheels on Arch)
+ARG PIXELFLUX_FROM_GIT=0
+ARG PIXELFLUX_REF=master
+ARG PIXELFLUX_REPO=https://github.com/linuxserver/pixelflux.git
+ARG PCMFLUX_FROM_GIT=0
+ARG PCMFLUX_REF=master
+ARG PCMFLUX_REPO=https://github.com/linuxserver/pcmflux.git
+
 # ---------------------------------------------------------------------------
-# Optional upstream web + wheel (empty /webout and /dist when SELKIES_FROM_GIT!=1)
+# Optional upstream web + wheel (empty when SELKIES_FROM_GIT!=1)
 # ---------------------------------------------------------------------------
 FROM docker.io/library/node:26-alpine AS selkies-web-build
 ARG SELKIES_FROM_GIT
@@ -85,6 +92,52 @@ RUN if [ "$SELKIES_FROM_GIT" != "1" ]; then exit 0; fi; \
     python3 -m pip install --no-cache-dir --upgrade build; \
     python3 -m build; \
     cp -a dist/*.whl /dist/
+
+# ---------------------------------------------------------------------------
+# pixelflux + pcmflux wheels from git (Arch + Rust)
+# ---------------------------------------------------------------------------
+FROM archlinux:latest AS flux-wheel-build
+ARG PIXELFLUX_FROM_GIT
+ARG PIXELFLUX_REF
+ARG PIXELFLUX_REPO
+ARG PCMFLUX_FROM_GIT
+ARG PCMFLUX_REF
+ARG PCMFLUX_REPO
+RUN mkdir -p /dist
+RUN if [ "${PIXELFLUX_FROM_GIT}" != "1" ] && [ "${PCMFLUX_FROM_GIT}" != "1" ]; then \
+      echo "skip flux-wheel-build"; exit 0; \
+    fi; \
+    set -eux; \
+    pacman -Syu --noconfirm --needed \
+      base-devel git rust cargo \
+      python python-pip python-setuptools python-wheel \
+      python-setuptools-rust \
+      clang lld \
+      libx264 libjpeg-turbo libpng \
+      libva libva-mesa-driver intel-media-driver \
+      ffmpeg \
+      libpulse libopus \
+      wayland libx11 libxcb libxext libxfixes libxdamage libxtst \
+      mesa \
+    && pacman -Scc --noconfirm; \
+    python -m pip install --break-system-packages --no-cache-dir build setuptools-rust wheel; \
+    if [ "${PIXELFLUX_FROM_GIT}" = "1" ]; then \
+      git init /build/pixelflux; \
+      cd /build/pixelflux; \
+      git remote add origin "${PIXELFLUX_REPO}"; \
+      git fetch --depth 1 origin "${PIXELFLUX_REF}"; \
+      git checkout FETCH_HEAD; \
+      python -m build --wheel --outdir /dist; \
+    fi; \
+    if [ "${PCMFLUX_FROM_GIT}" = "1" ]; then \
+      git init /build/pcmflux; \
+      cd /build/pcmflux; \
+      git remote add origin "${PCMFLUX_REPO}"; \
+      git fetch --depth 1 origin "${PCMFLUX_REF}"; \
+      git checkout FETCH_HEAD; \
+      python -m build --wheel --outdir /dist; \
+    fi; \
+    ls -la /dist
 
 # Joystick interposer + fake-udev
 FROM archlinux:latest AS add-ons
@@ -179,9 +232,10 @@ RUN mkdir -p /etc/xdg/lxqt /etc/xdg/pcmanfm-qt/lxqt && \
         "${TERMINAL}" > /etc/xdg/pcmanfm-qt/lxqt/settings.conf; \
     printf 'TerminalEmulator=%s.desktop\n' "${TERMINAL}" > /etc/xdg/qtxdg.conf
 
-# Selkies: local wheels, overlaid by git-built wheel when SELKIES_FROM_GIT=1
+# Selkies + flux: local wheels, overlaid by git-built wheels when *_FROM_GIT=1
 COPY addons/remotearch/wheels/ /tmp/wheels/
 COPY --from=selkies-wheel-build /dist/ /tmp/wheels-git/
+COPY --from=flux-wheel-build /dist/ /tmp/wheels-flux/
 RUN pacman -Sy --noconfirm --needed \
       python python-pip python-evdev \
       base-devel linux-api-headers && \
@@ -189,6 +243,16 @@ RUN pacman -Sy --noconfirm --needed \
     if ls /tmp/wheels-git/selkies-*.whl >/dev/null 2>&1; then \
       cp -a /tmp/wheels-git/selkies-*.whl /tmp/wheels/; \
       echo "Using Selkies wheel from git build"; \
+    fi; \
+    if ls /tmp/wheels-flux/pixelflux-*.whl >/dev/null 2>&1; then \
+      rm -f /tmp/wheels/pixelflux-*.whl; \
+      cp -a /tmp/wheels-flux/pixelflux-*.whl /tmp/wheels/; \
+      echo "Using pixelflux wheel from git build"; \
+    fi; \
+    if ls /tmp/wheels-flux/pcmflux-*.whl >/dev/null 2>&1; then \
+      rm -f /tmp/wheels/pcmflux-*.whl; \
+      cp -a /tmp/wheels-flux/pcmflux-*.whl /tmp/wheels/; \
+      echo "Using pcmflux wheel from git build"; \
     fi; \
     SELKIES_WHL="$(ls -1 /tmp/wheels/selkies-0.0.0.dev0-*.whl 2>/dev/null | head -1 || true)"; \
     if [ -z "${SELKIES_WHL}" ]; then \
@@ -209,7 +273,7 @@ RUN pacman -Sy --noconfirm --needed \
     (command -v selkies-resize >/dev/null || \
       find /usr -name 'selkies-resize' 2>/dev/null | head -1 | \
       xargs -r -I{} ln -sf {} /usr/local/bin/selkies-resize) || true; \
-    rm -rf /tmp/wheels /tmp/wheels-git
+    rm -rf /tmp/wheels /tmp/wheels-git /tmp/wheels-flux
 
 COPY --from=add-ons /opt/add-ons/lib/ /usr/lib/
 
@@ -236,6 +300,7 @@ RUN echo "[ ! -z \"\$TERM\" -a -r /etc/motd ] && cat /etc/motd" >> /etc/bash.bas
 
 # GStreamer + Intel QSV / VA (qsvav1enc etc.). Selkies UI may still only list h264/jpeg.
 RUN pacman -Sy --noconfirm --needed \
+      pipewire-jack \
       gstreamer \
       gst-plugins-base \
       gst-plugins-good \
