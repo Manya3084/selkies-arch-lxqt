@@ -315,10 +315,8 @@ RUN if [ -e /tmp/selkies-web-git/index.html ] || [ -e /tmp/selkies-web-git/src/s
 RUN echo "[ ! -z \"\$TERM\" -a -r /etc/motd ] && cat /etc/motd" >> /etc/bash.bashrc && \
     printf "==============================================\n=         remotearch (Arch + LXQt)            =\n==============================================\n" > /etc/motd
 
-# GStreamer + Intel QSV / VA. ffmpeg may pull jack2; swap to pipewire-jack.
-RUN pacman -Rdd --noconfirm jack2 jack 2>/dev/null || true; \
-    pacman -Sy --noconfirm --needed \
-      pipewire-jack \
+# GStreamer + Intel QSV / VA. Do not install pipewire-jack (conflicts with jack2 from ffmpeg).
+RUN pacman -Sy --noconfirm --needed \
       gstreamer \
       gst-plugins-base \
       gst-plugins-good \
