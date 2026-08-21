@@ -21,6 +21,7 @@ ARG PIXELFLUX_REPO=https://github.com/linuxserver/pixelflux.git
 ARG PCMFLUX_FROM_GIT=0
 ARG PCMFLUX_REF=master
 ARG PCMFLUX_REPO=https://github.com/linuxserver/pcmflux.git
+ARG ENABLE_CHAOTIC_AUR=0
 
 # ---------------------------------------------------------------------------
 # Optional upstream web + wheel (empty when SELKIES_FROM_GIT!=1)
@@ -31,15 +32,18 @@ ARG SELKIES_REF
 ARG SELKIES_REPO
 ARG SELKIES_MODE=websockets
 ARG SELKIES_UPLOAD_DIR=/home/arch/Desktop
+COPY addons/remotearch/patches/selkies-av1enc.patch /tmp/selkies-av1enc.patch
 RUN mkdir -p /webout
 RUN if [ "$SELKIES_FROM_GIT" != "1" ]; then echo "skip web-build"; exit 0; fi; \
     set -eux; \
-    apk add --no-cache git; \
+    apk add --no-cache git patch; \
     git init /src; \
     cd /src; \
     git remote add origin "${SELKIES_REPO}"; \
     git fetch --depth 1 origin "${SELKIES_REF}"; \
     git checkout FETCH_HEAD; \
+    patch -p1 < /tmp/selkies-av1enc.patch; \
+    echo "patched selkies web sources for av1enc"; \
     mkdir -p /build; \
     cp -a addons/selkies-web-core addons/selkies-dashboard \
       addons/universal-touch-gamepad docs/assets /build/; \
@@ -67,16 +71,19 @@ ARG SELKIES_REF
 ARG SELKIES_REPO
 ARG PACKAGE_VERSION
 ARG PYPI_PACKAGE
+COPY addons/remotearch/patches/selkies-av1enc.patch /tmp/selkies-av1enc.patch
 RUN mkdir -p /dist
 RUN if [ "$SELKIES_FROM_GIT" != "1" ]; then echo "skip wheel-build"; exit 0; fi; \
     set -eux; \
-    apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    apt-get update && apt-get install -y --no-install-recommends git ca-certificates patch \
       && rm -rf /var/lib/apt/lists/*; \
     git init /opt/selkies; \
     cd /opt/selkies; \
     git remote add origin "${SELKIES_REPO}"; \
     git fetch --depth 1 origin "${SELKIES_REF}"; \
     git checkout FETCH_HEAD; \
+    patch -p1 < /tmp/selkies-av1enc.patch; \
+    echo "patched selkies wheel sources for av1enc"; \
     mkdir -p /opt/pypi; \
     cp -a src README.md pyproject.toml /opt/pypi/; \
     cd /opt/pypi; \
@@ -104,6 +111,9 @@ ARG PCMFLUX_FROM_GIT
 ARG PCMFLUX_REF
 ARG PCMFLUX_REPO
 ENV TURBOJPEG_DYNAMIC=1
+ENV LIBCLANG_PATH=/usr/lib
+COPY addons/remotearch/patches/pixelflux-nvenc-stub.rs /tmp/nvenc-stub.rs
+COPY addons/remotearch/patches/pixelflux-av1-vaapi.patch /tmp/pixelflux-av1-vaapi.patch
 RUN mkdir -p /dist
 RUN if [ "${PIXELFLUX_FROM_GIT}" != "1" ] && [ "${PCMFLUX_FROM_GIT}" != "1" ]; then \
       echo "skip flux-wheel-build"; exit 0; \
@@ -113,8 +123,8 @@ RUN if [ "${PIXELFLUX_FROM_GIT}" != "1" ] && [ "${PCMFLUX_FROM_GIT}" != "1" ]; t
       base-devel git rust pkgconf cmake nasm \
       python python-pip python-setuptools python-wheel \
       python-setuptools-rust \
-      clang lld \
-      x264 libjpeg-turbo libpng \
+      clang lld llvm \
+      x264 libjpeg-turbo libpng libyuv \
       libva libva-mesa-driver intel-media-driver \
       ffmpeg \
       libpulse opus \
@@ -129,6 +139,22 @@ RUN if [ "${PIXELFLUX_FROM_GIT}" != "1" ] && [ "${PCMFLUX_FROM_GIT}" != "1" ]; t
       git remote add origin "${PIXELFLUX_REPO}"; \
       git fetch --depth 1 origin "${PIXELFLUX_REF}"; \
       git checkout FETCH_HEAD; \
+      if [ -f pixelflux/src/encoders/vaapi.rs ]; then \
+        patch -p1 < /tmp/pixelflux-av1-vaapi.patch; \
+        echo "patched pixelflux master for VAAPI AV1 (output_mode=2)"; \
+      fi; \
+      if [ -f pixelflux_wayland/Cargo.toml ]; then \
+        sed -i \
+          -e 's/ffmpeg-next = "8.0"/ffmpeg-next = "9"/' \
+          -e 's/ffmpeg-sys-next = "8.0"/ffmpeg-sys-next = "9"/' \
+          -e 's/features = \["cuda"\]/features = []/' \
+          pixelflux_wayland/Cargo.toml; \
+        echo "patched pixelflux Cargo.toml (ffmpeg-sys 9, no CUDA)"; \
+      fi; \
+      if [ -f pixelflux_wayland/src/encoders/nvenc.rs ]; then \
+        cp /tmp/nvenc-stub.rs pixelflux_wayland/src/encoders/nvenc.rs; \
+        echo "stubbed nvenc.rs (no CUDA)"; \
+      fi; \
       python3 -m build --wheel --outdir /dist; \
     fi && \
     if [ "${PCMFLUX_FROM_GIT}" = "1" ]; then \
@@ -188,7 +214,7 @@ RUN pacman -Syu --noconfirm --needed \
         python python-pip linux-api-headers \
         coturn labwc qt6-wayland \
         ttf-dejavu ttf-liberation noto-fonts noto-fonts-cjk noto-fonts-emoji \
-        git \
+        git gnupg libyuv x264 ffmpeg \
     && pacman -Scc --noconfirm
 
 # s6 supervision via s6-overlay (provides /command/s6-svscan)
@@ -300,9 +326,8 @@ RUN if [ -e /tmp/selkies-web-git/index.html ] || [ -e /tmp/selkies-web-git/src/s
 RUN echo "[ ! -z \"\$TERM\" -a -r /etc/motd ] && cat /etc/motd" >> /etc/bash.bashrc && \
     printf "==============================================\n=         remotearch (Arch + LXQt)            =\n==============================================\n" > /etc/motd
 
-# GStreamer + Intel QSV / VA (qsvav1enc etc.). Selkies UI may still only list h264/jpeg.
+# GStreamer + Intel QSV / VA. Do not install pipewire-jack (conflicts with jack2 from ffmpeg).
 RUN pacman -Sy --noconfirm --needed \
-      pipewire-jack \
       gstreamer \
       gst-plugins-base \
       gst-plugins-good \
@@ -321,6 +346,21 @@ RUN pacman -Sy --noconfirm --needed \
       firefox \
       gvfs gvfs-smb \
     && pacman -Scc --noconfirm
+
+# Optional Chaotic-AUR (prebuilt AUR). Off unless ENABLE_CHAOTIC_AUR=1.
+ARG ENABLE_CHAOTIC_AUR=0
+RUN if [ "${ENABLE_CHAOTIC_AUR}" = "1" ]; then \
+      set -eux; \
+      pacman-key --init; \
+      pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com; \
+      pacman-key --lsign-key 3056513887B78AEB; \
+      pacman -U --noconfirm \
+        'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' \
+        'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'; \
+      grep -q '^\[chaotic-aur\]' /etc/pacman.conf || \
+        printf '\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist\n' >> /etc/pacman.conf; \
+      pacman -Sy --noconfirm --needed paru; \
+    fi
 
 USER 1000
 

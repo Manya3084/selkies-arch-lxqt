@@ -4,7 +4,7 @@ Arch Linux + LXQt desktop streamed in a browser via [Selkies](https://github.com
 
 One image, one `docker compose build`. Aimed at Intel Arc (A750/A770) but works with AMD (Mesa RADV) and NVIDIA (with host drivers + NVIDIA Container Toolkit).
 
-**Current release:** [0.2.0](CHANGELOG.md) (2026-08-21)
+**Current release:** [0.3.0](CHANGELOG.md) (2026-08-22)
 
 ## Features
 
@@ -16,6 +16,7 @@ One image, one `docker compose build`. Aimed at Intel Arc (A750/A770) but works 
 - Optional apps in the Dockerfile (`dolphin-emu`, `firefox`, `gvfs`)
 - Extra pacman packages from a **persistent list** (reinstalled on each start, no Dockerfile edit)
 - **Built from git at image build time** — [Selkies](https://github.com/selkies-project/selkies) `main`, [pixelflux](https://github.com/linuxserver/pixelflux) `master`, [pcmflux](https://github.com/linuxserver/pcmflux) `master` (no vendored wheels)
+- **AV1 (VA-API)** on Intel Arc — dashboard encoder **AV1 (VA-API Full Frame)**; default stays H.264
 
 ## Quick start
 
@@ -71,7 +72,16 @@ docker compose build --build-arg SELKIES_REF=<sha> \
   --build-arg PIXELFLUX_REF=<sha> --build-arg PCMFLUX_REF=<sha>
 ```
 
-Point `PIXELFLUX_REPO` / `SELKIES_REPO` at a **fork** when carrying patches (for example AV1).
+Point `PIXELFLUX_REPO` / `SELKIES_REPO` at a **fork** when carrying patches.
+
+### AV1 (Intel Arc / VA-API)
+
+The image patches **pixelflux master** to encode AV1 via `av1_vaapi`
+(`output_mode=2`) and patches **Selkies** so the encoder menu includes `av1enc`.
+Default encoder stays H.264 so a machine without AV1 encode still streams.
+In the dashboard pick **AV1 (VA-API Full Frame)** after the desktop is up.
+Needs Intel Arc (or other VA-API AV1 encode) on `/dev/dri`. WebRTC stays H.264.
+Do **not** set `PIXELFLUX_REF=av1` — that old upstream branch has no compositor socket.
 
 ## GPU setup
 

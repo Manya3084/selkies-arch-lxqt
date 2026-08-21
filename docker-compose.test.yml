@@ -1,13 +1,18 @@
-# Test stack: Selkies + pixelflux + pcmflux built from upstream git.
-# Does not replace the daily container (port 3022, separate image/name/home).
+# Test stack on port 3022 — does not replace the daily container.
+# Chaotic-AUR + paru enabled.
 #
+# pixelflux is linuxserver `master` (working compositor) plus
+# addons/remotearch/patches/pixelflux-av1-vaapi.patch (VAAPI av1_vaapi,
+# output_mode=2). Selkies is upstream `main` plus
+# addons/remotearch/patches/selkies-av1enc.patch so the dashboard lists
+# "AV1 (VA-API Full Frame)" and the browser decodes av01.
+# Do not use PIXELFLUX_REF=av1 — that old branch has no compositor socket.
+#
+#   git fetch origin && git checkout main
 #   mkdir -p home-test && sudo chown -R 1000:1000 home-test
-#   docker compose -f docker-compose.test.yml build --no-cache
+#   docker compose -f docker-compose.test.yml build
 #   docker compose -f docker-compose.test.yml up -d
 #   curl -sI http://127.0.0.1:3022/
-#
-# Pin a commit instead of floating main/master:
-#   docker compose -f docker-compose.test.yml build --build-arg SELKIES_REF=<sha>
 
 services:
   selkies:
@@ -23,6 +28,7 @@ services:
         PIXELFLUX_REF: "master"
         PCMFLUX_FROM_GIT: "1"
         PCMFLUX_REF: "master"
+        ENABLE_CHAOTIC_AUR: "1"
     image: selkies-arch-lxqt-test
     environment:
       SELKIES_MODE: websockets
@@ -41,6 +47,7 @@ services:
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/tmp/runtime-arch/dbus-system-bus"
       SELKIES_WAYLAND_OUTPUTS: "1"
       PIPEWIRE_LATENCY: "512/48000"
+      PACMAN_PACKAGES: "${PACMAN_PACKAGES:-}"
     cpuset: "12-23,36-47"
     ports:
       - "3022:8080"

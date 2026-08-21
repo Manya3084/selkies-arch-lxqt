@@ -1,5 +1,6 @@
 .env
 home/
+home-test/
 *.log
 .DS_Store
 __pycache__/
