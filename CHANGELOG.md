@@ -4,6 +4,19 @@ All notable changes to **selkies-arch-lxqt** are documented here.
 
 Format inspired by [Keep a Changelog](https://keepachangelog.com/). Versioning follows the image/desktop stack, not upstream Selkies releases.
 
+## [0.3.0] — 2026-08-22
+
+### Added
+
+- **AV1 (VA-API)** on Intel Arc: pixelflux `master` is patched for `av1_vaapi` (`output_mode=2`); Selkies is patched so the dashboard lists **AV1 (VA-API Full Frame)** and the browser decodes `av01`.
+- Default encoder remains H.264. WebRTC stays H.264.
+- NVENC stub + ffmpeg-sys 9 so pixelflux builds on this CUDA-less Arch image.
+
+### Notes
+
+- Do not set `PIXELFLUX_REF=av1` — that old upstream branch has no compositor socket.
+- Rebuild the image (`docker compose build`) after pulling; the running container does not pick this up.
+
 ## [0.2.0] — 2026-08-21
 
 ### Changed
@@ -53,7 +66,7 @@ First public cut of a standalone **Arch Linux + LXQt** Selkies desktop image.
 - Vendored wheels under `addons/remotearch/wheels/` (removed in 0.2.0)
 - Joystick interposer and fake-udev sources (`addons/js-interposer`, `addons/fake-udev`)
 - s6 service set: dbus, pipewire, pipewire-pulse, wireplumber, wayland, xvfb, lxqt, selkies, coturn
-- Optional `dolphin-emu` package in the image
+- Optional `dolphin-emu` package in the Dockerfile
 - `.env.example` for `PASSWD`, host port, and GPU node selection (no secrets in compose)
 
 ### Security
