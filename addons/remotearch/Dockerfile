@@ -119,7 +119,7 @@ RUN if [ "${PIXELFLUX_FROM_GIT}" != "1" ] && [ "${PCMFLUX_FROM_GIT}" != "1" ]; t
       ffmpeg \
       libpulse opus \
       wayland libx11 libxcb libxext libxfixes libxdamage libxtst \
-      libdrm pixman libinput \
+      libdrm pixman libinput libxkbcommon \
       mesa && \
     pacman -Scc --noconfirm && \
     python3 -m pip install --break-system-packages --no-cache-dir build setuptools-rust wheel && \
