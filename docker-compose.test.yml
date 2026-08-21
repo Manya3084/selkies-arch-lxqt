@@ -1,18 +1,16 @@
 # Test stack on port 3022 — does not replace the daily container.
-# pixelflux from linuxserver `av1` branch (WIP VAAPI AV1).
-# Chaotic-AUR enabled (prebuilt AUR + paru).
+# Chaotic-AUR + paru enabled.
+#
+# pixelflux is linuxserver `master` (matches Selkies main). The `av1` branch
+# does not start the capture compositor Selkies expects (no wayland-0),
+# so labwc/LXQt wait forever and the UI sits on "Waiting for stream...".
+# To retry AV1 later: PIXELFLUX_REF: av1  (needs a Selkies patch too).
 #
 #   git fetch origin && git checkout test/av1
 #   mkdir -p home-test && sudo chown -R 1000:1000 home-test
-#   docker compose -f docker-compose.test.yml build --no-cache
+#   docker compose -f docker-compose.test.yml build
 #   docker compose -f docker-compose.test.yml up -d
 #   curl -sI http://127.0.0.1:3022/
-#
-# Daily stack stays on 3020. This uses image selkies-arch-lxqt-test and ./home-test.
-#
-# AV1 note: pixelflux can encode av1_vaapi (output_mode=2). Selkies UI may still
-# only offer H.264/JPEG until a client-side change lands. Watch logs for:
-#   Mode: AV1 (VAAPI)
 
 services:
   selkies:
@@ -25,7 +23,7 @@ services:
         SELKIES_REF: "main"
         PACKAGE_VERSION: "0.0.0.dev0"
         PIXELFLUX_FROM_GIT: "1"
-        PIXELFLUX_REF: "av1"
+        PIXELFLUX_REF: "master"
         PCMFLUX_FROM_GIT: "1"
         PCMFLUX_REF: "master"
         ENABLE_CHAOTIC_AUR: "1"
