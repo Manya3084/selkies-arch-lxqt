@@ -4,6 +4,11 @@ services:
     build:
       context: .
       dockerfile: addons/remotearch/Dockerfile
+      args:
+        # Build Selkies wheel + web from upstream (no manual wheel extract)
+        SELKIES_FROM_GIT: "1"
+        SELKIES_REF: "main"
+        PACKAGE_VERSION: "0.0.0.dev0"
     image: selkies-arch-lxqt
     environment:
       SELKIES_MODE: websockets
