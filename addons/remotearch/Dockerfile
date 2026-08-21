@@ -21,6 +21,7 @@ ARG PIXELFLUX_REPO=https://github.com/linuxserver/pixelflux.git
 ARG PCMFLUX_FROM_GIT=0
 ARG PCMFLUX_REF=master
 ARG PCMFLUX_REPO=https://github.com/linuxserver/pcmflux.git
+ARG ENABLE_CHAOTIC_AUR=0
 
 # ---------------------------------------------------------------------------
 # Optional upstream web + wheel (empty when SELKIES_FROM_GIT!=1)
@@ -188,7 +189,7 @@ RUN pacman -Syu --noconfirm --needed \
         python python-pip linux-api-headers \
         coturn labwc qt6-wayland \
         ttf-dejavu ttf-liberation noto-fonts noto-fonts-cjk noto-fonts-emoji \
-        git \
+        git gnupg \
     && pacman -Scc --noconfirm
 
 # s6 supervision via s6-overlay (provides /command/s6-svscan)
@@ -321,6 +322,21 @@ RUN pacman -Sy --noconfirm --needed \
       firefox \
       gvfs gvfs-smb \
     && pacman -Scc --noconfirm
+
+# Optional Chaotic-AUR (prebuilt AUR). Off unless ENABLE_CHAOTIC_AUR=1.
+ARG ENABLE_CHAOTIC_AUR=0
+RUN if [ "${ENABLE_CHAOTIC_AUR}" = "1" ]; then \
+      set -eux; \
+      pacman-key --init; \
+      pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com; \
+      pacman-key --lsign-key 3056513887B78AEB; \
+      pacman -U --noconfirm \
+        'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' \
+        'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'; \
+      grep -q '^\[chaotic-aur\]' /etc/pacman.conf || \
+        printf '\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist\n' >> /etc/pacman.conf; \
+      pacman -Sy --noconfirm --needed paru; \
+    fi
 
 USER 1000
 
