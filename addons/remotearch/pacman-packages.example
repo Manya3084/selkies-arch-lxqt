@@ -1,0 +1,7 @@
+# Extra Arch packages reinstalled on every container start.
+# Copy to /home/arch/.config/pacman-packages (host: ./home/.config/pacman-packages).
+# One package per line. Comments and blank lines are ignored.
+#
+# mpv
+# vlc
+# htop
