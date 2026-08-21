@@ -162,7 +162,7 @@ public_address() {
   local answer
   for family in -4 -6; do
     answer="$(dig "${family}" TXT +short @ns1.google.com o-o.myaddr.l.google.com 2>/dev/null \
-              | tr -d '"' | grep -v '^;;' | head -n 1)"
+              | tr -d '\"' | grep -v '^;;' | head -n 1)"
     [ -z "${answer}" ] && continue
     [ "${family}" = "-6" ] && answer="[${answer}]"
     echo "${answer}"
@@ -252,6 +252,32 @@ is_true "${START_LXQT:-true}" || drop_service lxqt
 if ! is_true "${SELKIES_ENABLE_INTERNAL_TURN}"; then
   drop_service coturn
 fi
+
+# Extra Arch packages from a persistent list (survives image rebuilds).
+# PACMAN_PACKAGES="mpv vlc" and/or /home/arch/.config/pacman-packages
+install_extra_pacman_packages() {
+  local listf="${PACMAN_PACKAGES_FILE:-/home/arch/.config/pacman-packages}"
+  local -a pkgs=()
+  local line
+  if [ -n "${PACMAN_PACKAGES:-}" ]; then
+    # shellcheck disable=SC2206
+    pkgs+=(${PACMAN_PACKAGES})
+  fi
+  if [ -f "${listf}" ]; then
+    while IFS= read -r line || [ -n "${line}" ]; do
+      line="${line%%#*}"
+      line="${line#"${line%%[![:space:]]*}"}"
+      line="${line%"${line##*[![:space:]]}"}"
+      [ -n "${line}" ] && pkgs+=("${line}")
+    done < "${listf}"
+  fi
+  [ "${#pkgs[@]}" -gt 0 ] || return 0
+  echo "Installing extra pacman packages: ${pkgs[*]}"
+  sudo pacman -Sy --noconfirm --needed "${pkgs[@]}" || \
+    echo "warning: extra pacman install failed (desktop still starts)"
+}
+
+install_extra_pacman_packages
 
 # Hand over to s6 service supervision
 exec s6-svscan -t5 /etc/service
