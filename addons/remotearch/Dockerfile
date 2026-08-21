@@ -103,13 +103,14 @@ ARG PIXELFLUX_REPO
 ARG PCMFLUX_FROM_GIT
 ARG PCMFLUX_REF
 ARG PCMFLUX_REPO
+ENV TURBOJPEG_DYNAMIC=1
 RUN mkdir -p /dist
 RUN if [ "${PIXELFLUX_FROM_GIT}" != "1" ] && [ "${PCMFLUX_FROM_GIT}" != "1" ]; then \
       echo "skip flux-wheel-build"; exit 0; \
     fi; \
     set -eux; \
     pacman -Syu --noconfirm --needed \
-      base-devel git rust pkgconf \
+      base-devel git rust pkgconf cmake nasm \
       python python-pip python-setuptools python-wheel \
       python-setuptools-rust \
       clang lld \
@@ -118,6 +119,7 @@ RUN if [ "${PIXELFLUX_FROM_GIT}" != "1" ] && [ "${PCMFLUX_FROM_GIT}" != "1" ]; t
       ffmpeg \
       libpulse opus \
       wayland libx11 libxcb libxext libxfixes libxdamage libxtst \
+      libdrm pixman libinput \
       mesa && \
     pacman -Scc --noconfirm && \
     python3 -m pip install --break-system-packages --no-cache-dir build setuptools-rust wheel && \
