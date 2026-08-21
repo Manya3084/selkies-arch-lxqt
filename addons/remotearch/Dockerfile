@@ -109,34 +109,34 @@ RUN if [ "${PIXELFLUX_FROM_GIT}" != "1" ] && [ "${PCMFLUX_FROM_GIT}" != "1" ]; t
     fi; \
     set -eux; \
     pacman -Syu --noconfirm --needed \
-      base-devel git rust cargo \
+      base-devel git rust pkgconf \
       python python-pip python-setuptools python-wheel \
       python-setuptools-rust \
       clang lld \
-      libx264 libjpeg-turbo libpng \
+      x264 libjpeg-turbo libpng \
       libva libva-mesa-driver intel-media-driver \
       ffmpeg \
-      libpulse libopus \
+      libpulse opus \
       wayland libx11 libxcb libxext libxfixes libxdamage libxtst \
-      mesa \
-    && pacman -Scc --noconfirm; \
-    python -m pip install --break-system-packages --no-cache-dir build setuptools-rust wheel; \
+      mesa && \
+    pacman -Scc --noconfirm && \
+    python3 -m pip install --break-system-packages --no-cache-dir build setuptools-rust wheel && \
     if [ "${PIXELFLUX_FROM_GIT}" = "1" ]; then \
       git init /build/pixelflux; \
       cd /build/pixelflux; \
       git remote add origin "${PIXELFLUX_REPO}"; \
       git fetch --depth 1 origin "${PIXELFLUX_REF}"; \
       git checkout FETCH_HEAD; \
-      python -m build --wheel --outdir /dist; \
-    fi; \
+      python3 -m build --wheel --outdir /dist; \
+    fi && \
     if [ "${PCMFLUX_FROM_GIT}" = "1" ]; then \
       git init /build/pcmflux; \
       cd /build/pcmflux; \
       git remote add origin "${PCMFLUX_REPO}"; \
       git fetch --depth 1 origin "${PCMFLUX_REF}"; \
       git checkout FETCH_HEAD; \
-      python -m build --wheel --outdir /dist; \
-    fi; \
+      python3 -m build --wheel --outdir /dist; \
+    fi && \
     ls -la /dist
 
 # Joystick interposer + fake-udev
