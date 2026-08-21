@@ -4,6 +4,22 @@ All notable changes to **selkies-arch-lxqt** are documented here.
 
 Format inspired by [Keep a Changelog](https://keepachangelog.com/). Versioning follows the image/desktop stack, not upstream Selkies releases.
 
+## [0.2.0] — 2026-08-21
+
+### Changed
+
+- Image now **builds Selkies, pixelflux, and pcmflux from git** at `docker compose build` time (no extracted / vendored wheels).
+  - Selkies: [selkies-project/selkies](https://github.com/selkies-project/selkies) `main` (wheel + web client)
+  - pixelflux: [linuxserver/pixelflux](https://github.com/linuxserver/pixelflux) `master` (Rust, Arch stage)
+  - pcmflux: [linuxserver/pcmflux](https://github.com/linuxserver/pcmflux) `master`
+- Removed pre-built `addons/remotearch/wheels/*.whl` from the repo (directory kept with `.gitkeep` only)
+- Compose defaults: `SELKIES_FROM_GIT=1`, `PIXELFLUX_FROM_GIT=1`, `PCMFLUX_FROM_GIT=1`
+
+### Notes
+
+- First build is long (Rust compile) and needs several GB of Docker disk.
+- Pin refs with `--build-arg SELKIES_REF=` / `PIXELFLUX_REF=` / `PCMFLUX_REF=`.
+
 ## [0.1.2] — 2026-08-19
 
 ### Changed
@@ -34,9 +50,7 @@ First public cut of a standalone **Arch Linux + LXQt** Selkies desktop image.
 - Arch-based Dockerfile (`addons/remotearch/Dockerfile`) with LXQt, labwc, XWayland, PipeWire, and s6-overlay
 - One-shot `docker compose` build (`context: .`, `dockerfile: addons/remotearch/Dockerfile`)
 - Intel Arc-oriented GPU defaults (`DRI_NODE`, `MESA_VK_DEVICE_SELECT`, Vulkan ICD path)
-- Vendored wheels under `addons/remotearch/wheels/`:
-  - `selkies-0.0.0.dev0` (preferred local build with web client)
-  - `pixelflux-2.0.0`, `pcmflux-2.0.0` (cp314 manylinux)
+- Vendored wheels under `addons/remotearch/wheels/` (removed in 0.2.0)
 - Joystick interposer and fake-udev sources (`addons/js-interposer`, `addons/fake-udev`)
 - s6 service set: dbus, pipewire, pipewire-pulse, wireplumber, wayland, xvfb, lxqt, selkies, coturn
 - Optional `dolphin-emu` package in the image
@@ -46,11 +60,6 @@ First public cut of a standalone **Arch Linux + LXQt** Selkies desktop image.
 
 - Desktop password comes from `${PASSWD}` / `.env` only — not hard-coded in `docker-compose.yml`
 - Host-specific OMV bind mounts removed from the published compose file
-
-### Notes
-
-- Only one `selkies-*.whl` is needed in `wheels/` (the Dockerfile will pick `.dev0` first if present).
-- Upstream Selkies `docs/`, `infra/`, and `scripts/` may still exist in the tree from the initial import; they are not required to build or run this desktop image and can be deleted in a later cleanup commit.
 
 ### Credits
 
