@@ -106,6 +106,7 @@ ARG PCMFLUX_REF
 ARG PCMFLUX_REPO
 ENV TURBOJPEG_DYNAMIC=1
 ENV LIBCLANG_PATH=/usr/lib
+COPY addons/remotearch/patches/pixelflux-nvenc-stub.rs /tmp/nvenc-stub.rs
 RUN mkdir -p /dist
 RUN if [ "${PIXELFLUX_FROM_GIT}" != "1" ] && [ "${PCMFLUX_FROM_GIT}" != "1" ]; then \
       echo "skip flux-wheel-build"; exit 0; \
@@ -138,6 +139,10 @@ RUN if [ "${PIXELFLUX_FROM_GIT}" != "1" ] && [ "${PCMFLUX_FROM_GIT}" != "1" ]; t
           -e 's/features = \["cuda"\]/features = []/' \
           pixelflux_wayland/Cargo.toml; \
         echo "patched pixelflux Cargo.toml (ffmpeg-sys 9, no CUDA)"; \
+      fi; \
+      if [ -f pixelflux_wayland/src/encoders/nvenc.rs ]; then \
+        cp /tmp/nvenc-stub.rs pixelflux_wayland/src/encoders/nvenc.rs; \
+        echo "stubbed nvenc.rs (no CUDA)"; \
       fi; \
       python3 -m build --wheel --outdir /dist; \
     fi && \
