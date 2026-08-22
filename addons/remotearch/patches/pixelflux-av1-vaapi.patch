@@ -1,1 +1,395 @@
-PLACEHOLDER
+diff --git a/pixelflux/src/encoders/software.rs b/pixelflux/src/encoders/software.rs
+index d25fab0..e0ae164 100644
+--- a/pixelflux/src/encoders/software.rs
++++ b/pixelflux/src/encoders/software.rs
+@@ -1095,7 +1095,7 @@ pub fn encode_cpu(
+ /// encoder and the settings line report from here, so what is logged is what is encoded.
+ pub fn stripe_count(height: i32, output_mode: i32, fullframe: bool) -> usize {
+     let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+-    if (output_mode == 1 && fullframe) || height < MIN_STRIPE_HEIGHT {
++    if output_mode == 2 || (output_mode == 1 && fullframe) || height < MIN_STRIPE_HEIGHT {
+         return 1;
+     }
+     cores.min((height / MIN_STRIPE_HEIGHT) as usize).max(1)
+diff --git a/pixelflux/src/encoders/vaapi.rs b/pixelflux/src/encoders/vaapi.rs
+index c107068..ead775e 100644
+--- a/pixelflux/src/encoders/vaapi.rs
++++ b/pixelflux/src/encoders/vaapi.rs
+@@ -4,8 +4,8 @@
+  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+  */
+ 
+-//! Hardware-accelerated H.264 encoding on VA-API through FFmpeg's `h264_vaapi`
+-//! encoder. Frames reach the GPU by one of three entry points — a Wayland
++//! Hardware-accelerated H.264 / AV1 encoding on VA-API through FFmpeg's
++//! `h264_vaapi` / `av1_vaapi` encoders. Frames reach the GPU by one of three entry points — a Wayland
+ //! DRM-PRIME dmabuf (`encode_dmabuf`), a host BGRA frame from the X11 capture
+ //! path (`encode_host_argb`), or already-planar pixels (`encode_raw`) — and an
+ //! FFmpeg filter graph runs VA-VPP (`scale_vaapi`) to land the pixels on the GPU
+@@ -278,6 +278,7 @@ pub struct VaapiEncoder {
+     current_kf_s: f64,
+ 
+     omit_stripe_headers: bool,
++    output_mode: i32,
+ }
+ 
+ /// Assert `VaapiEncoder` is `Send`: its raw FFmpeg pointers are owned exclusively and the
+@@ -285,6 +286,24 @@ pub struct VaapiEncoder {
+ /// no aliasing.
+ unsafe impl Send for VaapiEncoder {}
+ 
++fn vaapi_codec_name(output_mode: i32) -> &'static str {
++    if output_mode == 2 { "av1_vaapi" } else { "h264_vaapi" }
++}
++
++fn vaapi_profile(output_mode: i32) -> &'static str {
++    if output_mode == 2 { "main" } else { "high" }
++}
++
++/// Dashboard CRF is x264-scale (~5–50). av1_vaapi -qp is AV1 base_q_index (0–255).
++/// Slider 5 → qp 20 (near-lossless), 40 → qp 160, 50 → qp 200.
++fn av1_qp_from_crf(crf: i32) -> u32 {
++    (crf * 4).clamp(1, 255) as u32
++}
++
++fn vaapi_cqp(output_mode: i32, crf: i32) -> u32 {
++    if output_mode == 2 { av1_qp_from_crf(crf) } else { crf.max(1) as u32 }
++}
++
+ /// Tear down every FFmpeg object in dependency order so nothing is freed while still
+ /// referenced: first the reusable packet and frames, then the filter graph and codec context, and
+ /// last the frames/device contexts they pointed at (encoder pool, DRM frames, VA-API device, DRM
+@@ -437,7 +456,10 @@ impl VaapiEncoder {
+                 ));
+             }
+ 
+-            let enc_sw_format = if settings.video_fullcolor {
++            let enc_sw_format = if settings.output_mode == 2 {
++                // av1_vaapi Main is 4:2:0 NV12; 4:4:4 is not a reliable VA-API AV1 profile.
++                ff::AVPixelFormat::AV_PIX_FMT_NV12
++            } else if settings.video_fullcolor {
+                 match fullcolor_sw_format(hw_device_ctx) {
+                     Some(fmt) => fmt,
+                     None => {
+@@ -474,16 +496,21 @@ impl VaapiEncoder {
+                 return Err("Failed to init DRM frames ctx".into());
+             }
+ 
+-            let codec_name = CString::new("h264_vaapi").unwrap();
++            let codec_name_str = vaapi_codec_name(settings.output_mode);
++            let codec_name = CString::new(codec_name_str).unwrap();
+             let codec = ff::avcodec_find_encoder_by_name(codec_name.as_ptr());
+             if codec.is_null() {
+                 ff::av_buffer_unref(&mut drm_frames_ref);
+                 ff::av_buffer_unref(&mut hw_device_ctx);
+                 ff::av_buffer_unref(&mut drm_device_ctx);
+-                return Err("h264_vaapi encoder not found".into());
++                return Err(format!("{codec_name_str} encoder not found"));
+             }
+ 
+-            let aligned_width = (width + 15) & !15;
++            let aligned_width = if settings.output_mode == 2 {
++                (width + 31) & !31
++            } else {
++                (width + 15) & !15
++            };
+             let aligned_height = (height + 31) & !31;
+ 
+             let mut enc_frames_ref = ff::av_hwframe_ctx_alloc(hw_device_ctx);
+@@ -558,20 +585,24 @@ impl VaapiEncoder {
+                 set_opt(&mut opts, "rc_mode", "CBR");
+             } else {
+                 set_opt(&mut opts, "rc_mode", "CQP");
+-                set_opt(&mut opts, "qp", &settings.video_crf.to_string());
++                set_opt(&mut opts, "qp", &vaapi_cqp(settings.output_mode, settings.video_crf).to_string());
+             }
+             set_opt(&mut opts, "async_depth", "1");
+-            // Naming a profile is what pins 4:2:0 to High. A 4:4:4 session leaves it unset so
+-            // FFmpeg matches a profile against the surface format instead, which is the one place
+-            // a build whose h264_vaapi gains a 4:4:4 entry starts using it without a code change.
++            // Naming a profile is what pins 4:2:0 to High (H.264) or Main (AV1).
++            // A 4:4:4 H.264 session leaves it unset so FFmpeg matches a profile
++            // against the surface format instead.
+             if enc_sw_format == ff::AVPixelFormat::AV_PIX_FMT_NV12 {
+-                set_opt(&mut opts, "profile", "high");
++                set_opt(&mut opts, "profile", vaapi_profile(settings.output_mode));
+             }
++            if settings.output_mode == 2 {
++                set_opt(&mut opts, "level", "4.0");
++            } else {
+             set_opt(
+                 &mut opts,
+                 "level",
+                 &super::min_h264_level(width as u32, height as u32, fps as u32).to_string(),
+             );
++            }
+ 
+             let ret = ff::avcodec_open2(encoder_ctx, codec, &mut opts);
+             ff::av_dict_free(&mut opts);
+@@ -583,8 +614,8 @@ impl VaapiEncoder {
+                 ff::av_buffer_unref(&mut drm_device_ctx);
+                 if enc_sw_format != ff::AVPixelFormat::AV_PIX_FMT_NV12 {
+                     return Err(format!(
+-                        "Failed to open encoder for 4:4:4 ({}): {}. This FFmpeg build's h264_vaapi \
+-                         advertises no 4:4:4 profile.",
++                        "Failed to open encoder for 4:4:4 ({}): {}. This FFmpeg build's vaapi \
++                         encoder advertises no 4:4:4 profile.",
+                         pix_fmt_name(enc_sw_format),
+                         ff_err_str(ret)
+                     ));
+@@ -776,13 +807,14 @@ impl VaapiEncoder {
+                 fps,
+                 sw_format: enc_sw_format,
+                 packed_444: Vec::new(),
+-                current_qp: settings.video_crf as u32,
++                current_qp: vaapi_cqp(settings.output_mode, settings.video_crf),
+                 qp_hysteresis_counter: 0,
+                 cbr_mode: settings.video_cbr_mode,
+                 current_bitrate_kbps: settings.video_bitrate_kbps,
+                 current_vbv_mult: settings.video_vbv_multiplier,
+                 current_kf_s: settings.keyframe_interval_s,
+                 omit_stripe_headers: settings.omit_stripe_headers,
++                output_mode: settings.output_mode,
+             })
+         }
+     }
+@@ -856,14 +888,18 @@ impl VaapiEncoder {
+         }
+         set_opt(&mut opts, "async_depth", "1");
+         if !self.is_fullcolor() {
+-            set_opt(&mut opts, "profile", "high");
++            set_opt(&mut opts, "profile", vaapi_profile(self.output_mode));
+         }
++        if self.output_mode == 2 {
++            set_opt(&mut opts, "level", "4.0");
++        } else {
+         set_opt(
+             &mut opts,
+             "level",
+             &super::min_h264_level(self.width as u32, self.height as u32, self.fps.max(1) as u32)
+                 .to_string(),
+         );
++        }
+ 
+         let ret = ff::avcodec_open2(self.encoder_ctx, self.codec, &mut opts);
+         ff::av_dict_free(&mut opts);
+@@ -898,6 +934,9 @@ impl VaapiEncoder {
+             return Ok(());
+         }
+ 
++        // Pipeline passes dashboard CRF; remap AV1 onto base_q_index before compare/reopen.
++        let target_qp = vaapi_cqp(self.output_mode, target_qp as i32);
++
+         if target_qp == self.current_qp {
+             self.qp_hysteresis_counter = 0;
+             return Ok(());
+diff --git a/pixelflux/src/lib.rs b/pixelflux/src/lib.rs
+index c045b4d..e1268df 100644
+--- a/pixelflux/src/lib.rs
++++ b/pixelflux/src/lib.rs
+@@ -1211,7 +1211,7 @@ fn build_readback_encoders(
+         "[Wayland] Encode Node Index: {} | Driver: {}",
+         settings.encode_node_index.max(0), encode_driver
+     );
+-    if encode_driver.contains("nvidia") {
++    if settings.output_mode != 2 && encode_driver.contains("nvidia") {
+         if let Some(GpuEncoder::Nvenc(mut enc)) = prior {
+             match enc.reconfigure_resolution(settings) {
+                 Ok(()) => {
+@@ -1299,7 +1299,11 @@ fn wayland_encode_loop(pool: &WlFramePool, cfg: WlEncodeConfig) -> Option<GpuEnc
+     let (mut video_encoder, mut openh264_encoder) =
+         build_readback_encoders(&settings, cfg.try_gpu, cfg.prior.or(inherited));
+     if cfg.try_gpu && video_encoder.is_none() && openh264_encoder.is_none() {
+-        println!("[Wayland] Decision: No GPU Encoder available -> Using CPU Software Encoding.");
++        if settings.output_mode == 2 {
++            println!("[Wayland] Decision: AV1 requires VAAPI (av1_vaapi); no CPU fallback.");
++        } else {
++            println!("[Wayland] Decision: No GPU Encoder available -> Using CPU Software Encoding.");
++        }
+     }
+     let n_stripes = wayland_stripe_count(
+         &settings,
+@@ -1538,6 +1542,7 @@ fn wayland_encode_loop(pool: &WlFramePool, cfg: WlEncodeConfig) -> Option<GpuEnc
+             if f.is_animated {
+                 damage.push(Rectangle::new((0, 0).into(), (width, height).into()));
+             }
++            if settings.output_mode != 2 {
+             let force_idr_all = requested_idr
+                 || (settings.output_mode == 1
+                     && crate::pipeline::periodic_idr_due(&settings, f.frame_id));
+@@ -1554,6 +1559,7 @@ fn wayland_encode_loop(pool: &WlFramePool, cfg: WlEncodeConfig) -> Option<GpuEnc
+                 false,
+                 force_idr_all,
+             );
++            }
+         }
+ 
+         let WlFrame { id, buf, .. } = f;
+@@ -1595,6 +1601,12 @@ fn encoder_fullcolor(video_encoder: Option<&GpuEncoder>, settings: &RustCaptureS
+     }
+ }
+ 
++/// Video (not JPEG). Mode 1 is H.264; mode 2 is AV1 (VA-API `av1_vaapi`).
++#[inline]
++pub(crate) fn is_video_mode(output_mode: i32) -> bool {
++    output_mode == 1 || output_mode == 2
++}
++
+ /// Compose the encoder half of the 1 s debug log line (backend, colorspace, frame mode) for
+ /// whichever thread owns the encoders.
+ fn encoder_desc(
+@@ -1626,7 +1638,8 @@ fn encoder_desc(
+     } else {
+         "Striped"
+     };
+-    format!("H264 ({}) {} {} {} CRF:{}", backend, cs_str, range_str, frame_str, settings.video_crf)
++    let q = if settings.output_mode == 2 { settings.video_crf * 4 } else { settings.video_crf };
++    format!("{} ({}) {} {} {} CRF:{}{}", if settings.output_mode == 2 { "AV1" } else { "H264" }, backend, cs_str, range_str, frame_str, settings.video_crf, if settings.output_mode == 2 { format!(" qp:{}", q.clamp(1,255)) } else { String::new() })
+ }
+ 
+ /// How many horizontal stripes a frame is split into, for the settings line and the stats.
+@@ -1673,7 +1686,7 @@ fn log_stream_settings(
+                 None => "CPU",
+             }
+         };
+-        log_msg.push_str(&format!(" | Mode: H264 ({})", encoder_type));
++        log_msg.push_str(&format!(" | Mode: {} ({})", if settings.output_mode == 2 { "AV1" } else { "H264" }, encoder_type));
+ 
+         if video_encoder.is_some() || openh264 || settings.video_fullframe {
+             log_msg.push_str(" FullFrame");
+@@ -1834,7 +1847,7 @@ fn rebuild_zerocopy_encoder(
+ ) -> Option<GpuEncoder> {
+     let settings = &cap.settings;
+     let encode_driver = get_gpu_driver(settings.encode_node_index.max(0));
+-    if encode_driver.contains("nvidia") {
++    if settings.output_mode != 2 && encode_driver.contains("nvidia") {
+         let egl_display = state
+             .gles_renderer
+             .as_ref()
+@@ -1877,7 +1890,7 @@ fn start_capture_on_display(
+                 settings.encode_node_index = idx - 128;
+             }
+ 
+-    if settings.output_mode == 1 {
++    if is_video_mode(settings.output_mode) {
+         settings.width &= !1;
+         settings.height &= !1;
+     }
+@@ -2086,7 +2099,7 @@ fn start_capture_on_display(
+     }
+ 
+     let use_cpu_explicit = settings.use_cpu || settings.encode_node_index == -1;
+-    let gpu_intent = settings.output_mode == 1 && !settings.use_openh264 && !use_cpu_explicit;
++    let gpu_intent = is_video_mode(settings.output_mode) && !settings.use_openh264 && !use_cpu_explicit;
+     if use_cpu_explicit && !(settings.output_mode == 1 && settings.use_openh264) {
+         println!("[Wayland] CPU encoding selected (use_cpu=true or encode_node_index=-1).");
+     }
+@@ -2109,7 +2122,7 @@ fn start_capture_on_display(
+             settings.encode_node_index.max(0), encode_driver
+         );
+ 
+-        if encode_driver.contains("nvidia") {
++        if settings.output_mode != 2 && encode_driver.contains("nvidia") {
+             let reused = match prior_zero_copy.as_mut() {
+                 Some(GpuEncoder::Nvenc(enc)) => match enc.reconfigure_resolution(&settings) {
+                     Ok(()) => {
+@@ -2868,7 +2881,7 @@ fn render_node_tick(
+                     );
+                     cap.video_encoder = None;
+                     let s = &cap.settings;
+-                    let try_gpu = s.output_mode == 1
++                    let try_gpu = is_video_mode(s.output_mode)
+                         && !s.use_openh264
+                         && !(s.use_cpu || s.encode_node_index == -1);
+                     bootstrap_readback_pool(cap, node.id, false, try_gpu, None, None);
+@@ -3272,7 +3285,7 @@ fn render_node_tick(
+                     pool.shutdown();
+                 }
+                 let s = &cap.settings;
+-                let try_gpu = s.output_mode == 1
++                let try_gpu = is_video_mode(s.output_mode)
+                     && !s.use_openh264
+                     && !(s.use_cpu || s.encode_node_index == -1);
+                 eprintln!("[Wayland] encode thread died; rebuilding the readback path.");
+@@ -3428,7 +3441,7 @@ fn render_node_tick(
+                                     // Mirror the startup intent: readback still
+                                     // tries the GPU unless the operator opted out.
+                                     let s = &cap.settings;
+-                                    let try_gpu = s.output_mode == 1
++                                    let try_gpu = is_video_mode(s.output_mode)
+                                         && !s.use_openh264
+                                         && !(s.use_cpu || s.encode_node_index == -1);
+                                     // Host frames reach the pool as BGRA; only our own
+diff --git a/pixelflux/src/pipeline.rs b/pixelflux/src/pipeline.rs
+index 4b53894..ddef62d 100644
+--- a/pixelflux/src/pipeline.rs
++++ b/pixelflux/src/pipeline.rs
+@@ -197,13 +197,13 @@ fn select_encoder(settings: &RustCaptureSettings) -> X11Encoder {
+             }
+         };
+     }
+-    if settings.output_mode == 1 && !settings.use_cpu && settings.encode_node_index != -1 {
++    if (settings.output_mode == 1 || settings.output_mode == 2) && !settings.use_cpu && settings.encode_node_index != -1 {
+         let encode_driver = crate::get_gpu_driver(settings.encode_node_index.max(0));
+         println!(
+             "[x11] Encode Node Index: {} | Driver: {}",
+             settings.encode_node_index.max(0), encode_driver
+         );
+-        if !encode_driver.is_empty() && !encode_driver.contains("nvidia") {
++        if settings.output_mode == 2 || (!encode_driver.is_empty() && !encode_driver.contains("nvidia")) {
+             println!("[x11] Initializing Unified VAAPI Encoder...");
+             match VaapiEncoder::new_host(settings) {
+                 Ok(e) => {
+@@ -231,7 +231,9 @@ fn select_encoder(settings: &RustCaptureSettings) -> X11Encoder {
+             }
+         };
+     }
+-    if settings.output_mode == 1 {
++    if settings.output_mode == 2 {
++        println!("[x11] AV1 requires VAAPI (av1_vaapi); no CPU fallback.");
++    } else if settings.output_mode == 1 {
+         println!("[x11] No GPU Encoder available -> Using CPU Software Encoding.");
+     }
+     software_h264_encoder(settings)
+@@ -522,6 +524,9 @@ impl X11Pipeline {
+                 width as usize * 4,
+                 "software encode path assumes tightly-packed rows (stride == width*4)"
+             );
++            if self.settings.output_mode == 2 {
++                Vec::new()
++            } else {
+             let force_idr_all = requested
+                 || (self.settings.output_mode == 1
+                     && periodic_idr_due(&self.settings, self.frame_counter));
+@@ -538,6 +543,7 @@ impl X11Pipeline {
+                 true,
+                 force_idr_all,
+             )
++            }
+         };
+ 
+         // An unserved request stays armed: on an infinite GOP an IDR lost to an encode
+diff --git a/pixelflux/src/x11/mod.rs b/pixelflux/src/x11/mod.rs
+index 2334b53..dc76716 100644
+--- a/pixelflux/src/x11/mod.rs
++++ b/pixelflux/src/x11/mod.rs
+@@ -232,8 +232,8 @@ fn clamp_offset(x: i32, root: u16) -> i16 {
+ /// width/height `<= 0`) the capture tracks the full root minus the offset, otherwise the
+ /// requested size is clamped to what is available from it. Saturating subtraction plus a final
+ /// `u16` clamp (minimum 2) keep pathological settings from overflowing or collapsing to an
+-/// unusable surface. H.264 (`output_mode == 1`) requires even dimensions, so both are then
+-/// rounded down to a multiple of two.
++/// unusable surface. H.264 (`output_mode == 1`) and AV1 (`output_mode == 2`) require even
++/// dimensions, so both are then rounded down to a multiple of two.
+ fn resolve_dims(root_w: u16, root_h: u16, s: &RustCaptureSettings) -> (u16, u16) {
+     let cap_x = clamp_offset(s.capture_x, root_w) as i32;
+     let cap_y = clamp_offset(s.capture_y, root_h) as i32;
+@@ -251,7 +251,7 @@ fn resolve_dims(root_w: u16, root_h: u16, s: &RustCaptureSettings) -> (u16, u16)
+     };
+     w = w.clamp(2, u16::MAX as i32);
+     h = h.clamp(2, u16::MAX as i32);
+-    if s.output_mode == 1 {
++    if s.output_mode == 1 || s.output_mode == 2 {
+         w &= !1;
+         h &= !1;
+     }
