@@ -1,5 +1,5 @@
 diff --git a/addons/selkies-dashboard-wish/src/components/dashboard/settings.tsx b/addons/selkies-dashboard-wish/src/components/dashboard/settings.tsx
-index fc4671b..4e44a62 100644
+index fc4671b..de5876f 100644
 --- a/addons/selkies-dashboard-wish/src/components/dashboard/settings.tsx
 +++ b/addons/selkies-dashboard-wish/src/components/dashboard/settings.tsx
 @@ -74,6 +74,7 @@ const encoderOptions = [
@@ -19,7 +19,7 @@ index fc4671b..4e44a62 100644
  
  const FRAMERATE_STEPS = [8, 12, 15, 24, 25, 30, 48, 50, 60, 90, 100, 120, 144, 165, 240];
  
-@@ -718,6 +719,9 @@ export function Settings() {
+@@ -679,6 +680,9 @@ export function Settings() {
      const handleEncoderChange = (selectedEncoder: string) => {
          setEncoder(selectedEncoder);
          localStorage.setItem(getPrefixedKey('encoder'), selectedEncoder);
@@ -29,7 +29,7 @@ index fc4671b..4e44a62 100644
          // One knob for both transports; the server switches the pipeline encoder on this.
          debouncedPostSetting({ encoder: selectedEncoder });
          // Rate control follows the encoder unless pinned (explicit client/server
-@@ -789,6 +793,7 @@ export function Settings() {
+@@ -743,6 +747,7 @@ export function Settings() {
      };
  
      const handleH264FullColorToggle = () => {
@@ -37,7 +37,7 @@ index fc4671b..4e44a62 100644
          writeConditional(VIDEO_FULLCOLOR_SPEC, !videoFullColor, setVideoFullColor, { persist: true });
      };
  
-@@ -1218,14 +1223,16 @@ export function Settings() {
+@@ -1280,14 +1285,15 @@ export function Settings() {
                          {isH264 && (
                              <>
                                  {(renderableSettings.videoFullColor ?? true) && (
@@ -57,7 +57,7 @@ index fc4671b..4e44a62 100644
                                  </div>
                                  )}
 diff --git a/addons/selkies-dashboard/src/components/Sidebar.jsx b/addons/selkies-dashboard/src/components/Sidebar.jsx
-index 58ff1d3..3b205cd 100644
+index 58ff1d3..a93970b 100644
 --- a/addons/selkies-dashboard/src/components/Sidebar.jsx
 +++ b/addons/selkies-dashboard/src/components/Sidebar.jsx
 @@ -43,6 +43,7 @@ const encoderOptions = [
@@ -68,7 +68,7 @@ index 58ff1d3..3b205cd 100644
    "jpeg",
  ];
  
-@@ -1963,6 +1964,9 @@ function Sidebar() {
+@@ -1718,6 +1719,9 @@ function Sidebar() {
      setEncoder(selectedEncoder);
      localStorage.setItem(getPrefixedKey("encoder"), selectedEncoder);
      // One knob for both transports; the server switches the pipeline encoder on this.
@@ -78,7 +78,7 @@ index 58ff1d3..3b205cd 100644
      debouncedPostSetting({ encoder: selectedEncoder });
      // Rate control follows the encoder unless pinned (explicit client/server
      // choice). A derived change is not persisted, so it keeps following.
-@@ -2024,6 +2028,7 @@ function Sidebar() {
+@@ -1776,6 +1780,7 @@ function Sidebar() {
      debouncedPostSetting({ video_paintover_burst_frames: selectedFrames });
    };
    const handleH264FullColorToggle = () => {
@@ -101,11 +101,7 @@ index 58ff1d3..3b205cd 100644
    ].includes(encoder);
    const showCRF = H264_ENCODERS.includes(activeEncoder);
    const showH264Options = H264_ENCODERS.includes(activeEncoder);
-@@ -3098,14 +3104,16 @@ function Sidebar() {
-                 {showH264Options && (renderableSettings.videoFullColor ?? true) && (
-                   <div className="dev-setting-item toggle-item">
-                     <label htmlFor="videoFullColorToggle">
-                       {t("sections.video.fullColorLabel")}
+@@ -3127,11 +3133,13 @@ function Sidebar() {
                      </label>
                      <button
                        id="videoFullColorToggle"
@@ -319,10 +315,12 @@ index da89eb7..727dfe6 100644
        canvasContext.setTransform(1, 0, 0, 1, 0, 0);
        canvasContext.clearRect(0, 0, canvas.width, canvas.height);
 diff --git a/src/selkies/display_utils.py b/src/selkies/display_utils.py
-index 267ed73..68389b6 100644
+index 267ed73..1619ba2 100644
 --- a/src/selkies/display_utils.py
 +++ b/src/selkies/display_utils.py
-@@ -2292,8 +2292,8 @@ def apply_common_capture_settings(
+@@ -2290,9 +2290,9 @@ def apply_common_capture_settings(
+     cs.video_crf = crf
+     cs.video_paintover_crf = paintover_crf
      cs.video_paintover_burst_frames = paintover_burst
 -    cs.video_fullcolor = fullcolor
 +    cs.video_fullcolor = False if encoder == "av1enc" else fullcolor

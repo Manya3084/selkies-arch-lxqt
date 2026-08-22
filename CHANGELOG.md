@@ -4,6 +4,16 @@ All notable changes to **selkies-arch-lxqt** are documented here.
 
 Format inspired by [Keep a Changelog](https://keepachangelog.com/). Versioning follows the image/desktop stack, not upstream Selkies releases.
 
+## [0.3.3] — 2026-08-22
+
+### Fixed
+
+- Regenerated `selkies-av1enc.patch` against current selkies `main` (`3a0bc7a`). The chroma grey-out hunk had a wrong line count (`malformed patch at line 59`), which aborted the Alpine `patch` during `docker compose build`.
+
+### Notes
+
+- Rebuild required (`docker compose build`). Keep your local `docker-compose.yml` (host cpuset / volumes / password).
+
 ## [0.3.2] — 2026-08-22
 
 ### Added

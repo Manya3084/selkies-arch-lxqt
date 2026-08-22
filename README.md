@@ -4,7 +4,7 @@ Arch Linux + LXQt desktop streamed in a browser via [Selkies](https://github.com
 
 One image, one `docker compose build`. Aimed at Intel Arc (A750/A770) but works with AMD (Mesa RADV) and NVIDIA (with host drivers + NVIDIA Container Toolkit).
 
-**Current release:** [0.3.2](CHANGELOG.md) (2026-08-22)
+**Current release:** [0.3.3](CHANGELOG.md) (2026-08-22)
 
 ## Features
 
