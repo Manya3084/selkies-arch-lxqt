@@ -13,6 +13,7 @@ services:
         PIXELFLUX_REF: "main"
         PCMFLUX_FROM_GIT: "1"
         PCMFLUX_REF: "main"
+        ENABLE_CHAOTIC_AUR: "1"
     image: selkies-arch-lxqt
     environment:
       SELKIES_MODE: websockets
