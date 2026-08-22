@@ -4,6 +4,16 @@ All notable changes to **selkies-arch-lxqt** are documented here.
 
 Format inspired by [Keep a Changelog](https://keepachangelog.com/). Versioning follows the image/desktop stack, not upstream Selkies releases.
 
+## [0.3.6] — 2026-08-22
+
+### Fixed
+
+- AV1 CQP now remaps the dashboard CRF slider (x264 5–50) onto `av1_vaapi` `qp` (`base_q_index` 0–255): slider 5 → qp 20, 40 → qp 160, 50 → qp 200. Logs show `CRF:N qp:M`. CBR/bitrate path is unchanged.
+
+### Notes
+
+- Rebuild required (`docker compose build`). Stay on CQP/CRF mode to feel the slider; CBR still ignores CRF.
+
 ## [0.3.5] — 2026-08-22
 
 ### Fixed
