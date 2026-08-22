@@ -4,6 +4,17 @@ All notable changes to **selkies-arch-lxqt** are documented here.
 
 Format inspired by [Keep a Changelog](https://keepachangelog.com/). Versioning follows the image/desktop stack, not upstream Selkies releases.
 
+## [0.3.2] — 2026-08-22
+
+### Added
+
+- **Chaotic-AUR + paru** on the 3020 image. Compose now passes `ENABLE_CHAOTIC_AUR=1` so the Dockerfile hook (already on main, previously off) installs the Chaotic keyring/mirrorlist and `paru` at build time. Extra `pacman-packages` can then pull Chaotic names.
+
+### Notes
+
+- Rebuild required (`docker compose build && docker compose up -d`). The running container does not pick this up.
+- To skip: `docker compose build --build-arg ENABLE_CHAOTIC_AUR=0`.
+
 ## [0.3.1] — 2026-08-22
 
 ### Changed
