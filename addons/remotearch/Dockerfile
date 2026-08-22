@@ -329,10 +329,17 @@ RUN pacman -Sy --noconfirm --needed \
 
 # Extra apps — add packages here so they survive image rebuilds
 # Emulators (PCSX2, Flycast, …): drop official AppImages in /home/arch and run from there.
-RUN pacman -Sy --noconfirm --needed \
+# [multilib] is required for steam (32-bit). Pin lib32-vulkan-intel so pacman does
+# not satisfy lib32-vulkan-driver with swrast/lavapipe. lib32-mesa is 32-bit OpenGL;
+# lib32-vulkan-intel is 32-bit ANV (Proton/DXVK).
+RUN grep -q '^\[multilib\]' /etc/pacman.conf || \
+      printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> /etc/pacman.conf; \
+    pacman -Sy --noconfirm --needed \
       dolphin-emu \
       firefox \
       gvfs gvfs-smb \
+      steam steam-devices \
+      lib32-mesa lib32-vulkan-intel \
     && pacman -Scc --noconfirm
 
 # Optional Chaotic-AUR (prebuilt AUR). Off unless ENABLE_CHAOTIC_AUR=1.

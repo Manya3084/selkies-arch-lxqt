@@ -4,6 +4,18 @@ All notable changes to **selkies-arch-lxqt** are documented here.
 
 Format inspired by [Keep a Changelog](https://keepachangelog.com/). Versioning follows the image/desktop stack, not upstream Selkies releases.
 
+## [0.3.4] — 2026-08-22
+
+### Added
+
+- **[multilib]** + **Steam** in the image: `steam`, `steam-devices`, `lib32-mesa` (32-bit OpenGL), `lib32-vulkan-intel` (32-bit ANV for Proton). The vulkan-intel pin stops pacman picking `lib32-vulkan-swrast`.
+- Compose: `seccomp:unconfined` + `SYS_PTRACE` so Steam's pressure-vessel user namespaces work. Both Intel Vulkan ICDs (`intel_icd.json` + `intel_icd.i686.json`) so 32-bit games see Arc.
+
+### Notes
+
+- Rebuild required. Local compose should add `seccomp:unconfined` and the i686 ICD path; `VK_ICD_FILENAMES` with only the 64-bit JSON breaks Proton.
+- Steam library lives in `./home` and survives rebuilds.
+
 ## [0.3.3] — 2026-08-22
 
 ### Fixed

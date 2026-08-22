@@ -27,7 +27,8 @@ services:
       PASSWD: "${PASSWD:-changeme}"
       DRI_NODE: ${DRI_NODE:-/dev/dri/renderD128}
       MESA_VK_DEVICE_SELECT: ${MESA_VK_DEVICE_SELECT:-8086:56a1}
-      VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/intel_icd.json
+      # 64-bit + i686 Intel ICDs. Pinning only intel_icd.json breaks 32-bit Proton.
+      VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/intel_icd.json:/usr/share/vulkan/icd.d/intel_icd.i686.json
     ports:
       - "${HOST_PORT:-3020}:8080"
     devices:
@@ -35,8 +36,10 @@ services:
       - /dev/fuse:/dev/fuse
     cap_add:
       - SYS_ADMIN
+      - SYS_PTRACE
     security_opt:
       - apparmor:unconfined
+      - seccomp:unconfined
     volumes:
       - ./home:/home/arch
     shm_size: "2gb"

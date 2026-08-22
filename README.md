@@ -4,7 +4,7 @@ Arch Linux + LXQt desktop streamed in a browser via [Selkies](https://github.com
 
 One image, one `docker compose build`. Aimed at Intel Arc (A750/A770) but works with AMD (Mesa RADV) and NVIDIA (with host drivers + NVIDIA Container Toolkit).
 
-**Current release:** [0.3.3](CHANGELOG.md) (2026-08-22)
+**Current release:** [0.3.4](CHANGELOG.md) (2026-08-22)
 
 ## Features
 
@@ -13,11 +13,12 @@ One image, one `docker compose build`. Aimed at Intel Arc (A750/A770) but works 
 - PipeWire audio
 - s6-overlay process supervision
 - Joystick interposer + fake-udev (from Selkies addons)
-- Optional apps in the Dockerfile (`dolphin-emu`, `firefox`, `gvfs`)
+- Optional apps in the Dockerfile (`dolphin-emu`, `firefox`, `gvfs`, **Steam**)
 - Extra pacman packages from a **persistent list** (reinstalled on each start, no Dockerfile edit)
 - **Chaotic-AUR + paru** — prebuilt AUR repo and AUR helper baked into the image
 - **Built from git at image build time** — [Selkies](https://github.com/selkies-project/selkies) `main`, [pixelflux](https://github.com/selkies-project/pixelflux) `main`, [pcmflux](https://github.com/selkies-project/pcmflux) `main` (no vendored wheels)
 - **AV1 (VA-API)** on Intel Arc — dashboard encoder **AV1 (VA-API Full Frame)**; default stays H.264
+- **Steam** via Arch `[multilib]` (`lib32-mesa` + `lib32-vulkan-intel` for Proton on Arc)
 
 ## Quick start
 
@@ -105,7 +106,7 @@ Defaults in `docker-compose.yml` / `.env`:
 |---|---|
 | `DRI_NODE` | Render node, e.g. `/dev/dri/renderD128` |
 | `MESA_VK_DEVICE_SELECT` | `vendor:device` PCI ID (Mesa device picker) |
-| `VK_ICD_FILENAMES` | Vulkan ICD JSON inside the image |
+| `VK_ICD_FILENAMES` | Vulkan ICD JSON(s), colon-separated. Include the i686 Intel ICD for Steam/Proton. |
 
 ### Intel Arc (default)
 
@@ -122,8 +123,10 @@ Image packages: `vulkan-intel`, `intel-media-driver`, Mesa.
 # .env
 DRI_NODE=/dev/dri/renderD128
 MESA_VK_DEVICE_SELECT=8086:56a1
-VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json:/usr/share/vulkan/icd.d/intel_icd.i686.json
 ```
+
+Pinning **only** the 64-bit ICD makes 32-bit Proton/DXVK miss Arc and fall back to software (or fail).
 
 ### AMD (Mesa RADV)
 
@@ -280,6 +283,20 @@ To skip Chaotic-AUR (smaller/faster build):
 docker compose build --build-arg ENABLE_CHAOTIC_AUR=0
 ```
 
+
+### Steam
+
+`steam` is in Arch **`[multilib]`**, not Chaotic. The image enables that repo and installs `steam`, `lib32-mesa` (32-bit OpenGL), and `lib32-vulkan-intel` (32-bit ANV). Both are required: Mesa is not the Intel Vulkan ICD.
+
+Steam's runtime needs unprivileged user namespaces. Compose sets `seccomp:unconfined` and `SYS_PTRACE` for that. On Debian/OMV hosts also check:
+
+```bash
+sysctl kernel.apparmor_restrict_unprivileged_userns user.max_user_namespaces
+# want restrict=0 (if the key exists) and max_user_namespaces > 0
+```
+
+Steam library and prefixes live in `./home` and survive rebuilds.
+
 ### Baked into the image
 
 For packages everyone should get, edit the “Extra apps” block in `addons/remotearch/Dockerfile`:
@@ -289,6 +306,8 @@ RUN pacman -Sy --noconfirm --needed \
       dolphin-emu \
       firefox \
       gvfs gvfs-smb \
+      steam steam-devices \
+      lib32-mesa lib32-vulkan-intel \
     && pacman -Scc --noconfirm
 ```
 
