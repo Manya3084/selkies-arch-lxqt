@@ -4,7 +4,7 @@ Arch Linux + LXQt desktop streamed in a browser via [Selkies](https://github.com
 
 One image, one `docker compose build`. Aimed at Intel Arc (A750/A770) but works with AMD (Mesa RADV) and NVIDIA (with host drivers + NVIDIA Container Toolkit).
 
-**Current release:** [0.3.1](CHANGELOG.md) (2026-08-22)
+**Current release:** [0.3.2](CHANGELOG.md) (2026-08-22)
 
 ## Features
 
@@ -15,6 +15,7 @@ One image, one `docker compose build`. Aimed at Intel Arc (A750/A770) but works 
 - Joystick interposer + fake-udev (from Selkies addons)
 - Optional apps in the Dockerfile (`dolphin-emu`, `firefox`, `gvfs`)
 - Extra pacman packages from a **persistent list** (reinstalled on each start, no Dockerfile edit)
+- **Chaotic-AUR + paru** — prebuilt AUR repo and AUR helper baked into the image
 - **Built from git at image build time** — [Selkies](https://github.com/selkies-project/selkies) `main`, [pixelflux](https://github.com/selkies-project/pixelflux) `main`, [pcmflux](https://github.com/selkies-project/pcmflux) `main` (no vendored wheels)
 - **AV1 (VA-API)** on Intel Arc — dashboard encoder **AV1 (VA-API Full Frame)**; default stays H.264
 
@@ -46,6 +47,7 @@ build:
     PIXELFLUX_REF: "main"
     PCMFLUX_FROM_GIT: "1"
     PCMFLUX_REF: "main"
+    ENABLE_CHAOTIC_AUR: "1"
 ```
 
 - **context** must be the repo root (so `COPY addons/js-interposer` works)
@@ -64,6 +66,7 @@ build:
 | `PCMFLUX_FROM_GIT` | `0` | `1` | Build pcmflux from git (Rust) |
 | `PCMFLUX_REPO` | `https://github.com/selkies-project/pcmflux.git` | | |
 | `PCMFLUX_REF` | `main` | `main` | |
+| `ENABLE_CHAOTIC_AUR` | `0` | `1` | Install Chaotic-AUR keyring + `paru` (prebuilt AUR) |
 
 Pin a commit instead of a floating branch:
 
@@ -263,7 +266,19 @@ environment:
 
 Example file: [`addons/remotearch/pacman-packages.example`](addons/remotearch/pacman-packages.example).
 
-**This is not AUR.** Official repos only. AppImages dropped in `/home/arch` already persist.
+AppImages dropped in `/home/arch` already persist.
+
+### Chaotic-AUR (prebuilt AUR)
+
+The image enables [Chaotic-AUR](https://aur.chaotic.cx/) at build time (`ENABLE_CHAOTIC_AUR=1`) and installs `paru`. Packages in `~/.config/pacman-packages` (or `PACMAN_PACKAGES`) can then include Chaotic names — `pacman -Sy --needed` sees `[chaotic-aur]`.
+
+For packages **not** in Chaotic, use `paru -S` inside the desktop. Those land in `/usr` and are **lost on the next image rebuild** unless you add them to the extra list *and* they exist in official or Chaotic repos.
+
+To skip Chaotic-AUR (smaller/faster build):
+
+```bash
+docker compose build --build-arg ENABLE_CHAOTIC_AUR=0
+```
 
 ### Baked into the image
 
