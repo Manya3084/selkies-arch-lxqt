@@ -4,7 +4,7 @@ Arch Linux + LXQt desktop streamed in a browser via [Selkies](https://github.com
 
 One image, one `docker compose build`. Aimed at Intel Arc (A750/A770) but works with AMD (Mesa RADV) and NVIDIA (with host drivers + NVIDIA Container Toolkit).
 
-**Current release:** [0.3.4](CHANGELOG.md) (2026-08-22)
+**Current release:** [0.3.5](CHANGELOG.md) (2026-08-22)
 
 ## Features
 
@@ -283,6 +283,20 @@ To skip Chaotic-AUR (smaller/faster build):
 docker compose build --build-arg ENABLE_CHAOTIC_AUR=0
 ```
 
+
+### Audio / PipeWire
+
+Default quantum is **512/48000**. Compose may override:
+
+```yaml
+environment:
+  PIPEWIRE_LATENCY: "512/48000"
+  SELKIES_AUDIO_REDUNDANCY: "false"
+  SELKIES_AUDIO_FRAME_DURATION_MS: "20"
+  SELKIES_AUDIO_BITRATE: "192000"
+```
+
+`SELKIES_AUDIO_REDUNDANCY=false` stops the WebSocket RED gate from tearing down pcmflux (`2→0→2` pipeline restarts = audio pops + FPS spikes). Do not set `PIPEWIRE_LATENCY` expecting 128 — the old scripts ignored compose and forced 128.
 
 ### Steam
 

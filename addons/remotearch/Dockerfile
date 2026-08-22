@@ -294,6 +294,7 @@ RUN pacman -Sy --noconfirm --needed \
 COPY --from=add-ons /opt/add-ons/lib/ /usr/lib/
 
 COPY --chown=1000:1000 addons/remotearch/labwc-rc.xml /etc/xdg/labwc/rc.xml
+COPY addons/remotearch/pipewire-clock.conf /tmp/99-selkies-clock.conf
 COPY --chown=1000:1000 addons/remotearch/container-entrypoint.sh /etc/container-entrypoint.sh
 COPY --chown=1000:1000 addons/remotearch/selkies-entrypoint.sh /etc/selkies-entrypoint.sh
 COPY --chown=1000:1000 addons/remotearch/services/ /etc/service/
@@ -307,6 +308,8 @@ RUN if [ -e /tmp/selkies-web-git/index.html ] || [ -e /tmp/selkies-web-git/src/s
       echo "Using selkies-web from git build"; \
     fi; \
     rm -rf /tmp/selkies-web-git; \
+    mkdir -p /etc/pipewire/pipewire.conf.d && \
+    mv /tmp/99-selkies-clock.conf /etc/pipewire/pipewire.conf.d/99-selkies-clock.conf && \
     chmod -f 755 /etc/container-entrypoint.sh /etc/selkies-entrypoint.sh && \
     find /etc/service \( -name run -o -name finish \) -exec chmod -f 755 {} + && \
     chmod 4755 /usr/bin/sudo 2>/dev/null || true
@@ -359,7 +362,7 @@ RUN if [ "${ENABLE_CHAOTIC_AUR}" = "1" ]; then \
 
 USER 1000
 
-ENV PIPEWIRE_LATENCY="128/48000"
+ENV PIPEWIRE_LATENCY="512/48000"
 ENV XDG_RUNTIME_DIR=/tmp/runtime-arch
 ENV PIPEWIRE_RUNTIME_DIR="${XDG_RUNTIME_DIR}"
 ENV PULSE_RUNTIME_PATH="${XDG_RUNTIME_DIR}/pulse"

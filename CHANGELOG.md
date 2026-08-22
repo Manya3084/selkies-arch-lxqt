@@ -4,6 +4,16 @@ All notable changes to **selkies-arch-lxqt** are documented here.
 
 Format inspired by [Keep a Changelog](https://keepachangelog.com/). Versioning follows the image/desktop stack, not upstream Selkies releases.
 
+## [0.3.5] — 2026-08-22
+
+### Fixed
+
+- PipeWire quantum is no longer hard-coded to `128/48000` (xruns under GPU encode, audio pops). `PIPEWIRE_LATENCY` from compose is honored (default **512/48000**). Clock locked to 48 kHz / 512 in `pipewire-clock.conf`.
+
+### Notes
+
+- Rebuild required for the entrypoint/service scripts. Compose can still override: `PIPEWIRE_LATENCY: "1024/48000"` if pops remain.
+
 ## [0.3.4] — 2026-08-22
 
 ### Added
