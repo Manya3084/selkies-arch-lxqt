@@ -19,6 +19,43 @@ index fc4671b..4e44a62 100644
  
  const FRAMERATE_STEPS = [8, 12, 15, 24, 25, 30, 48, 50, 60, 90, 100, 120, 144, 165, 240];
  
+@@ -718,6 +719,9 @@ export function Settings() {
+     const handleEncoderChange = (selectedEncoder: string) => {
+         setEncoder(selectedEncoder);
+         localStorage.setItem(getPrefixedKey('encoder'), selectedEncoder);
++        if (selectedEncoder === "av1enc" && videoFullColor) {
++            writeConditional(VIDEO_FULLCOLOR_SPEC, false, setVideoFullColor, { persist: true });
++        }
+         // One knob for both transports; the server switches the pipeline encoder on this.
+         debouncedPostSetting({ encoder: selectedEncoder });
+         // Rate control follows the encoder unless pinned (explicit client/server
+@@ -789,6 +793,7 @@ export function Settings() {
+     };
+ 
+     const handleH264FullColorToggle = () => {
++        if (encoder === "av1enc") return;
+         writeConditional(VIDEO_FULLCOLOR_SPEC, !videoFullColor, setVideoFullColor, { persist: true });
+     };
+ 
+@@ -1218,14 +1223,16 @@ export function Settings() {
+                         {isH264 && (
+                             <>
+                                 {(renderableSettings.videoFullColor ?? true) && (
+-                                <div className="flex items-center justify-between">
++                                <div className={`flex items-center justify-between${activeEncoder === "av1enc" ? " opacity-50" : ""}`}
++                                    title={activeEncoder === "av1enc" ? "AV1 VA-API is 4:2:0 only" : undefined}>
+                                     <div className="space-y-0.5">
+                                         <label className="text-sm font-medium">{t('sections.video.fullColorLabel')}</label>
+                                     </div>
+                                     <Switch
+-                                        checked={videoFullColor}
++                                        checked={activeEncoder === "av1enc" ? false : videoFullColor}
+                                         onCheckedChange={handleH264FullColorToggle}
+-                                        disabled={!serverSettings || serverSettings.video_fullcolor?.locked}
++                                        disabled={!serverSettings || serverSettings.video_fullcolor?.locked || activeEncoder === "av1enc"}
+                                     />
+                                 </div>
+                                 )}
 diff --git a/addons/selkies-dashboard/src/components/Sidebar.jsx b/addons/selkies-dashboard/src/components/Sidebar.jsx
 index 58ff1d3..3b205cd 100644
 --- a/addons/selkies-dashboard/src/components/Sidebar.jsx
@@ -31,7 +68,25 @@ index 58ff1d3..3b205cd 100644
    "jpeg",
  ];
  
-@@ -2579,12 +2580,13 @@ function Sidebar() {
+@@ -1963,6 +1964,9 @@ function Sidebar() {
+     setEncoder(selectedEncoder);
+     localStorage.setItem(getPrefixedKey("encoder"), selectedEncoder);
+     // One knob for both transports; the server switches the pipeline encoder on this.
++    if (selectedEncoder === "av1enc" && videoFullColor) {
++      writeConditional(VIDEO_FULLCOLOR_SPEC, false, setVideoFullColor, { persist: true });
++    }
+     debouncedPostSetting({ encoder: selectedEncoder });
+     // Rate control follows the encoder unless pinned (explicit client/server
+     // choice). A derived change is not persisted, so it keeps following.
+@@ -2024,6 +2028,7 @@ function Sidebar() {
+     debouncedPostSetting({ video_paintover_burst_frames: selectedFrames });
+   };
+   const handleH264FullColorToggle = () => {
++    if (encoder === "av1enc") return;
+     writeConditional(VIDEO_FULLCOLOR_SPEC, !videoFullColor, setVideoFullColor, { persist: true });
+   };
+   const handleUsePaintOverQualityToggle = () => {
+@@ -2579,12 +2584,13 @@ function Sidebar() {
  
    // The encoder relevant to the active transport; CBR/CRF applies to every H.264 encoder on both.
    const activeEncoder = encoder;
@@ -46,6 +101,28 @@ index 58ff1d3..3b205cd 100644
    ].includes(encoder);
    const showCRF = H264_ENCODERS.includes(activeEncoder);
    const showH264Options = H264_ENCODERS.includes(activeEncoder);
+@@ -3098,14 +3104,16 @@ function Sidebar() {
+                 {showH264Options && (renderableSettings.videoFullColor ?? true) && (
+                   <div className="dev-setting-item toggle-item">
+                     <label htmlFor="videoFullColorToggle">
+                       {t("sections.video.fullColorLabel")}
+                     </label>
+                     <button
+                       id="videoFullColorToggle"
+-                      className={`toggle-button-sidebar ${videoFullColor ? "active" : ""}`}
++                      className={`toggle-button-sidebar ${videoFullColor && activeEncoder !== "av1enc" ? "active" : ""}`}
+                       onClick={handleH264FullColorToggle}
+-                      aria-pressed={videoFullColor}
+-                      disabled={!serverSettings || serverSettings.video_fullcolor?.locked}
+-                      title={t(videoFullColor ? "buttons.videoFullColorDisableTitle" : "buttons.videoFullColorEnableTitle")}
++                      aria-pressed={videoFullColor && activeEncoder !== "av1enc"}
++                      disabled={!serverSettings || serverSettings.video_fullcolor?.locked || activeEncoder === "av1enc"}
++                      title={activeEncoder === "av1enc"
++                        ? "AV1 VA-API is 4:2:0 only"
++                        : t(videoFullColor ? "buttons.videoFullColorDisableTitle" : "buttons.videoFullColorEnableTitle")}
+                     >
+                       <span className="toggle-button-sidebar-knob"></span>
+                     </button>
 diff --git a/addons/selkies-web-core/lib/conditional-settings.js b/addons/selkies-web-core/lib/conditional-settings.js
 index dd68921..dd06b51 100644
 --- a/addons/selkies-web-core/lib/conditional-settings.js
@@ -245,9 +322,10 @@ diff --git a/src/selkies/display_utils.py b/src/selkies/display_utils.py
 index 267ed73..68389b6 100644
 --- a/src/selkies/display_utils.py
 +++ b/src/selkies/display_utils.py
-@@ -2292,7 +2292,7 @@ def apply_common_capture_settings(
+@@ -2292,8 +2292,8 @@ def apply_common_capture_settings(
      cs.video_paintover_burst_frames = paintover_burst
-     cs.video_fullcolor = fullcolor
+-    cs.video_fullcolor = fullcolor
++    cs.video_fullcolor = False if encoder == "av1enc" else fullcolor
      cs.video_streaming_mode = streaming
 -    cs.video_fullframe = encoder in ("h264enc", "openh264enc")
 +    cs.video_fullframe = encoder in ("h264enc", "openh264enc", "av1enc")
